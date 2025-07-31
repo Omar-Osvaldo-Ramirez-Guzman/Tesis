@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
@@ -22,7 +22,7 @@
           <button class="options-btn" onclick="toggleOptionsMenu()">⚙️</button>
           <div class="options-dropdown" id="optionsDropdown">
             <a href="#" onclick="showProfile()">👤 Perfil</a>
-            <a href="#" onclick="showAccount()">🔐 Cuenta</a>
+            <a href="#" onclick="testSupabaseConnection()">🔗 Probar Conexión</a>
             <a href="#" onclick="showSettings()">⚙️ Configuración</a>
             <a href="#" onclick="logout()">🚪 Cerrar Sesión</a>
           </div>
@@ -853,6 +853,77 @@
         </div>
       </div>
     </section>
+
+    <!-- Sección de Prueba de Conexión -->
+    <section id="conexion" class="pantalla oculto">
+      <div class="container">
+        <div class="section-header">
+          <h2>🔗 Prueba de Conexión Supabase</h2>
+          <div class="section-description">
+            <p>Verifica que tu aplicación esté correctamente conectada a Supabase y que todas las funciones de base de datos funcionen correctamente.</p>
+          </div>
+        </div>
+
+        <div class="connection-tests">
+          <div class="test-card">
+            <div class="card-header">
+              <h3>🔌 Estado de Conexión</h3>
+              <p>Verifica la conexión básica con Supabase</p>
+            </div>
+            <div class="test-result" id="connectionStatus">
+              <div class="test-loading">🔄 Verificando conexión...</div>
+            </div>
+            <button onclick="testSupabaseConnection()" class="btn-primary">🔍 Probar Conexión</button>
+          </div>
+
+          <div class="test-card">
+            <div class="card-header">
+              <h3>👤 Prueba de Autenticación</h3>
+              <p>Verifica que el sistema de usuarios funcione</p>
+            </div>
+            <div class="test-result" id="authTestStatus">
+              <div class="test-info">Inicia sesión para probar la autenticación</div>
+            </div>
+          </div>
+
+          <div class="test-card">
+            <div class="card-header">
+              <h3>💾 Prueba de Base de Datos</h3>
+              <p>Verifica que se puedan guardar y leer datos</p>
+            </div>
+            <div class="test-result" id="dbTestStatus">
+              <div class="test-info">Completa tu perfil para probar la base de datos</div>
+            </div>
+            <button onclick="testDatabaseOperations()" class="btn-secondary">🗄️ Probar Base de Datos</button>
+          </div>
+
+          <div class="test-card">
+            <div class="card-header">
+              <h3>📊 Información del Sistema</h3>
+              <p>Detalles técnicos de la conexión</p>
+            </div>
+            <div class="system-info" id="systemInfo">
+              <div class="info-item">
+                <span class="info-label">URL de Supabase:</span>
+                <span class="info-value" id="supabaseUrl">No configurado</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Estado del Cliente:</span>
+                <span class="info-value" id="clientStatus">No inicializado</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Usuario Actual:</span>
+                <span class="info-value" id="currentUser">No autenticado</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Última Prueba:</span>
+                <span class="info-value" id="lastTest">Nunca</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Modal para expandir canvas -->
@@ -869,7 +940,8 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js" defer></script>
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js" defer></script>
 </body>
 </html>
