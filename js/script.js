@@ -1,9 +1,36 @@
+// ===== CONFIGURACIÓN DE SUPABASE =====
+// IMPORTANTE: Reemplaza estos valores con los de tu proyecto Supabase
+const SUPABASE_URL = "TU_SUPABASE_URL_AQUI"
+const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY_AQUI"
+
+// Inicializar cliente de Supabase
+let supabase = null
+
+// Inicializar Supabase cuando esté disponible
+function initializeSupabase() {
+  try {
+    if (typeof window.supabase !== "undefined") {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      console.log("✅ Supabase inicializado correctamente")
+      updateSystemInfo()
+      return true
+    } else {
+      console.error("❌ Supabase no está disponible")
+      return false
+    }
+  } catch (error) {
+    console.error("❌ Error inicializando Supabase:", error)
+    return false
+  }
+}
+
 // Variables globales
 let userState = {
   isLoggedIn: false,
   hasProfile: false,
   email: "",
   userData: null,
+  supabaseUser: null,
 }
 
 let currentAnalysisData = null
@@ -58,9 +85,16 @@ const translations = {
   },
 }
 
-// Inicialización
+// ===== INICIALIZACIÓN =====
 document.addEventListener("DOMContentLoaded", () => {
   console.log("🚀 VozCheck iniciado")
+
+  // Inicializar Supabase
+  setTimeout(() => {
+    if (initializeSupabase()) {
+      checkAuthState()
+    }
+  }, 100)
 
   // Inicializar estado
   userState = {
@@ -68,30 +102,698 @@ document.addEventListener("DOMContentLoaded", () => {
     hasProfile: false,
     email: "",
     userData: null,
+    supabaseUser: null,
   }
 
   updateNavigation()
   showSection("auth")
 
-  // Event listeners para archivos
+  // Event listeners
   setupFileInputs()
-
-  // Event listeners para pangramas
   setupPangramListeners()
-
-  // Event listeners para navegación móvil
   setupMobileNavigation()
-
-  // Event listeners para validación
   setupValidation()
-
-  // Cargar configuración
   loadUserConfiguration()
 
   console.log("✅ VozCheck inicializado correctamente")
 })
 
-// Funciones de navegación
+// ===== FUNCIONES DE SUPABASE =====
+
+// Verificar estado de autenticación
+async function checkAuthState() {
+  if (!supabase) return
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      console.log("👤 Usuario autenticado:", user.email)
+      userState.isLoggedIn = true
+      userState.email = user.email
+      userState.supabaseUser = user
+
+      // Cargar perfil del usuario
+      await loadUserProfile(user.id)
+
+      updateNavigation()
+      if (userState.hasProfile) {
+        showSection("analisis")
+      } else {
+        showSection("perfil")
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error verificando autenticación:", error)
+  }
+}
+
+// Cargar perfil del usuario desde Supabase
+async function loadUserProfile(userId) {
+  if (!supabase) return
+
+  try {
+    const { data, error } = await supabase.from("perfiles").select("*").eq("user_id", userId).single()
+
+    if (error && error.code !== "PGRST116") {
+      throw error
+    }
+
+    if (data) {
+      console.log("📋 Perfil cargado:", data)
+      userState.hasProfile = true
+      userState.userData = data
+
+      // Llenar formulario con datos existentes
+      fillProfileForm(data)
+    } else {
+      console.log("📋 No se encontró perfil, usuario debe completarlo")
+      userState.hasProfile = false
+    }
+  } catch (error) {
+    console.error("❌ Error cargando perfil:", error)
+    userState.hasProfile = false
+  }
+}
+
+// Llenar formulario de perfil con datos existentes
+function fillProfileForm(data) {
+  const fields = {
+    nombreCompleto: data.nombre_completo,
+    correoUsuario: data.email,
+    telefono: data.telefono,
+    tipoUsuario: data.tipo_usuario,
+    preferenciaAnalisis: data.preferencia_analisis,
+    notifEmail: data.notif_email,
+    notifResultados: data.notif_resultados,
+    notifActualizaciones: data.notif_actualizaciones,
+  }
+
+  Object.entries(fields).forEach(([fieldId, value]) => {
+    const field = document.getElementById(fieldId)
+    if (field && value !== null && value !== undefined) {
+      if (field.type === "checkbox") {
+        field.checked = value
+      } else {
+        field.value = value
+      }
+    }
+  })
+
+  // Cambiar botones
+  const btnGuardar = document.getElementById("btnGuardarPerfil")
+  const btnEditar = document.getElementById("btnEditarPerfil")
+
+  if (btnGuardar) {
+    btnGuardar.style.display = "none"
+  }
+  if (btnEditar) {
+    btnEditar.style.display = "inline-block"
+  }
+
+  toggleProfileFields(false)
+}
+
+// Guardar perfil en Supabase
+async function saveProfileToSupabase(profileData) {
+  if (!supabase || !userState.supabaseUser) {
+    throw new Error("Supabase no disponible o usuario no autenticado")
+  }
+
+  try {
+    const dataToSave = {
+      user_id: userState.supabaseUser.id,
+      email: userState.email,
+      nombre_completo: profileData.nombre,
+      telefono: profileData.telefono || null,
+      tipo_usuario: profileData.tipoUsuario,
+      preferencia_analisis: profileData.preferenciaAnalisis || "basico",
+      notif_email: profileData.notificaciones.email,
+      notif_resultados: profileData.notificaciones.resultados,
+      notif_actualizaciones: profileData.notificaciones.actualizaciones,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase.from("perfiles").upsert(dataToSave, {
+      onConflict: "user_id",
+      returning: "minimal",
+    })
+
+    if (error) throw error
+
+    console.log("✅ Perfil guardado en Supabase")
+    return true
+  } catch (error) {
+    console.error("❌ Error guardando perfil:", error)
+    throw error
+  }
+}
+
+// ===== FUNCIONES DE AUTENTICACIÓN CON SUPABASE =====
+
+async function loginEmail() {
+  const email = document.getElementById("authEmail").value
+  const password = document.getElementById("authPassword").value
+  const statusElement = document.getElementById("authStatus")
+
+  clearFormErrors()
+
+  if (!email || !password) {
+    statusElement.textContent = "Por favor completa todos los campos"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  if (!validateEmail(email)) {
+    showFieldError("authEmail", "Ingresa un correo electrónico válido")
+    statusElement.textContent = "Correo electrónico no válido"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  if (!supabase) {
+    statusElement.textContent = "❌ Error: Supabase no está configurado"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  statusElement.textContent = "Iniciando sesión..."
+  statusElement.style.color = "#00ffe0"
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    })
+
+    if (error) throw error
+
+    console.log("✅ Login exitoso:", data.user.email)
+
+    userState.isLoggedIn = true
+    userState.email = data.user.email
+    userState.supabaseUser = data.user
+
+    // Cargar perfil
+    await loadUserProfile(data.user.id)
+
+    statusElement.textContent = "✅ Sesión iniciada correctamente"
+    statusElement.style.color = "#2ecc71"
+
+    updateNavigation()
+
+    if (userState.hasProfile) {
+      showSection("analisis")
+    } else {
+      showSection("perfil")
+    }
+  } catch (error) {
+    console.error("❌ Error en login:", error)
+    statusElement.textContent = `❌ Error: ${error.message}`
+    statusElement.style.color = "#e74c3c"
+  }
+}
+
+async function registerEmail() {
+  const email = document.getElementById("authEmail").value
+  const password = document.getElementById("authPassword").value
+  const statusElement = document.getElementById("authStatus")
+
+  clearFormErrors()
+
+  if (!email || !password) {
+    statusElement.textContent = "Por favor completa todos los campos"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  if (!validateEmail(email)) {
+    showFieldError("authEmail", "Ingresa un correo electrónico válido")
+    statusElement.textContent = "Correo electrónico no válido"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  if (password.length < 6) {
+    showFieldError("authPassword", "La contraseña debe tener al menos 6 caracteres")
+    statusElement.textContent = "Contraseña muy corta"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  if (!supabase) {
+    statusElement.textContent = "❌ Error: Supabase no está configurado"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  statusElement.textContent = "Creando cuenta..."
+  statusElement.style.color = "#00ffe0"
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+    })
+
+    if (error) throw error
+
+    if (data.user && !data.user.email_confirmed_at) {
+      statusElement.textContent = "📧 Revisa tu email para confirmar la cuenta"
+      statusElement.style.color = "#f1c40f"
+      return
+    }
+
+    console.log("✅ Registro exitoso:", data.user.email)
+
+    userState.isLoggedIn = true
+    userState.email = data.user.email
+    userState.supabaseUser = data.user
+    userState.hasProfile = false
+
+    const correoUsuario = document.getElementById("correoUsuario")
+    if (correoUsuario) {
+      correoUsuario.value = email
+    }
+
+    statusElement.textContent = "✅ Cuenta creada exitosamente"
+    statusElement.style.color = "#2ecc71"
+
+    updateNavigation()
+    showSection("perfil")
+  } catch (error) {
+    console.error("❌ Error en registro:", error)
+    statusElement.textContent = `❌ Error: ${error.message}`
+    statusElement.style.color = "#e74c3c"
+  }
+}
+
+async function loginGoogle() {
+  const statusElement = document.getElementById("authStatus")
+
+  if (!supabase) {
+    statusElement.textContent = "❌ Error: Supabase no está configurado"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  statusElement.textContent = "Conectando con Google..."
+  statusElement.style.color = "#00ffe0"
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+      },
+    })
+
+    if (error) throw error
+
+    // El redirect manejará el resto
+    console.log("🔄 Redirigiendo a Google...")
+  } catch (error) {
+    console.error("❌ Error con Google OAuth:", error)
+    statusElement.textContent = `❌ Error: ${error.message}`
+    statusElement.style.color = "#e74c3c"
+  }
+}
+
+async function loginFacebook() {
+  const statusElement = document.getElementById("authStatus")
+
+  if (!supabase) {
+    statusElement.textContent = "❌ Error: Supabase no está configurado"
+    statusElement.style.color = "#e74c3c"
+    return
+  }
+
+  statusElement.textContent = "Conectando con Facebook..."
+  statusElement.style.color = "#00ffe0"
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "facebook",
+      options: {
+        redirectTo: window.location.origin,
+      },
+    })
+
+    if (error) throw error
+
+    console.log("🔄 Redirigiendo a Facebook...")
+  } catch (error) {
+    console.error("❌ Error con Facebook OAuth:", error)
+    statusElement.textContent = `❌ Error: ${error.message}`
+    statusElement.style.color = "#e74c3c"
+  }
+}
+
+async function logout() {
+  const dropdown = document.getElementById("optionsDropdown")
+  if (dropdown) dropdown.classList.remove("show")
+
+  if (!confirm("¿Estás seguro de que quieres cerrar sesión?")) {
+    return
+  }
+
+  try {
+    if (supabase) {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      console.log("✅ Logout exitoso")
+    }
+
+    // Limpiar estado
+    userState = {
+      isLoggedIn: false,
+      hasProfile: false,
+      email: "",
+      userData: null,
+      supabaseUser: null,
+    }
+
+    updateNavigation()
+    showSection("auth")
+
+    const authForm = document.getElementById("authForm")
+    const authStatus = document.getElementById("authStatus")
+    if (authForm) authForm.reset()
+    if (authStatus) authStatus.textContent = ""
+  } catch (error) {
+    console.error("❌ Error en logout:", error)
+    alert("Error cerrando sesión: " + error.message)
+  }
+}
+
+// ===== FUNCIONES DE PERFIL CON SUPABASE =====
+
+async function guardarPerfil() {
+  const nombre = document.getElementById("nombreCompleto").value
+  const correo = document.getElementById("correoUsuario").value
+  const telefono = document.getElementById("telefono").value
+  const tipoUsuario = document.getElementById("tipoUsuario").value
+  const preferenciaAnalisis = document.getElementById("preferenciaAnalisis").value
+  const notifEmail = document.getElementById("notifEmail").checked
+  const notifResultados = document.getElementById("notifResultados").checked
+  const notifActualizaciones = document.getElementById("notifActualizaciones").checked
+
+  clearFormErrors()
+
+  let hasErrors = false
+
+  if (!nombre || !correo || !tipoUsuario) {
+    alert("Por favor completa los campos obligatorios (marcados con *)")
+    return
+  }
+
+  if (!validateEmail(correo)) {
+    showFieldError("correoUsuario", "Ingresa un correo electrónico válido")
+    hasErrors = true
+  } else {
+    showFieldSuccess("correoUsuario")
+  }
+
+  if (telefono && !validatePhone(telefono)) {
+    showFieldError("telefono", "El teléfono debe tener exactamente 10 dígitos numéricos")
+    hasErrors = true
+  } else if (telefono) {
+    showFieldSuccess("telefono")
+  }
+
+  if (hasErrors) return
+
+  const profileData = {
+    nombre,
+    correo,
+    telefono,
+    tipoUsuario,
+    preferenciaAnalisis,
+    notificaciones: {
+      email: notifEmail,
+      resultados: notifResultados,
+      actualizaciones: notifActualizaciones,
+    },
+  }
+
+  try {
+    // Guardar en Supabase
+    await saveProfileToSupabase(profileData)
+
+    userState.userData = profileData
+    userState.hasProfile = true
+
+    const btnGuardar = document.getElementById("btnGuardarPerfil")
+    const btnEditar = document.getElementById("btnEditarPerfil")
+
+    if (btnGuardar) btnGuardar.style.display = "none"
+    if (btnEditar) btnEditar.style.display = "inline-block"
+
+    toggleProfileFields(false)
+    alert("✅ Perfil guardado exitosamente en Supabase")
+
+    updateNavigation()
+    showSection("analisis")
+  } catch (error) {
+    console.error("❌ Error guardando perfil:", error)
+    alert("❌ Error guardando perfil: " + error.message)
+  }
+}
+
+function editarPerfil() {
+  const btnGuardar = document.getElementById("btnGuardarPerfil")
+  const btnEditar = document.getElementById("btnEditarPerfil")
+
+  if (btnGuardar) {
+    btnGuardar.style.display = "inline-block"
+    btnGuardar.textContent = "💾 Actualizar Perfil"
+  }
+  if (btnEditar) btnEditar.style.display = "none"
+
+  toggleProfileFields(true)
+}
+
+function toggleProfileFields(editable) {
+  const fields = [
+    "nombreCompleto",
+    "telefono",
+    "tipoUsuario",
+    "preferenciaAnalisis",
+    "notifEmail",
+    "notifResultados",
+    "notifActualizaciones",
+  ]
+
+  fields.forEach((fieldId) => {
+    const field = document.getElementById(fieldId)
+    if (field) {
+      if (fieldId === "correoUsuario") {
+        field.readOnly = true
+      } else {
+        field.readOnly = !editable
+        field.disabled = !editable
+      }
+    }
+  })
+}
+
+// ===== FUNCIONES DE PRUEBA DE CONEXIÓN =====
+
+async function testSupabaseConnection() {
+  const connectionStatus = document.getElementById("connectionStatus")
+  const authTestStatus = document.getElementById("authTestStatus")
+  const dbTestStatus = document.getElementById("dbTestStatus")
+
+  // Mostrar sección de conexión
+  showSection("conexion")
+
+  if (connectionStatus) {
+    connectionStatus.innerHTML = '<div class="test-loading">🔄 Probando conexión...</div>'
+  }
+
+  try {
+    if (!supabase) {
+      throw new Error("Cliente de Supabase no inicializado")
+    }
+
+    // Probar conexión básica
+    const { data, error } = await supabase.from("perfiles").select("count", { count: "exact", head: true })
+
+    if (error && error.code !== "PGRST116") {
+      throw error
+    }
+
+    // Conexión exitosa
+    if (connectionStatus) {
+      connectionStatus.innerHTML = `
+        <div class="test-result test-success">
+          ✅ Conexión exitosa con Supabase<br>
+          <small>Tabla 'perfiles' accesible</small>
+        </div>
+      `
+    }
+
+    // Actualizar estado de autenticación
+    if (authTestStatus) {
+      if (userState.isLoggedIn) {
+        authTestStatus.innerHTML = `
+          <div class="test-result test-success">
+            ✅ Usuario autenticado: ${userState.email}<br>
+            <small>ID: ${userState.supabaseUser?.id || "N/A"}</small>
+          </div>
+        `
+      } else {
+        authTestStatus.innerHTML = `
+          <div class="test-result test-info">
+            ℹ️ No hay usuario autenticado<br>
+            <small>Inicia sesión para probar la autenticación</small>
+          </div>
+        `
+      }
+    }
+
+    // Actualizar estado de base de datos
+    if (dbTestStatus) {
+      if (userState.hasProfile) {
+        dbTestStatus.innerHTML = `
+          <div class="test-result test-success">
+            ✅ Perfil cargado desde la base de datos<br>
+            <small>Datos sincronizados correctamente</small>
+          </div>
+        `
+      } else {
+        dbTestStatus.innerHTML = `
+          <div class="test-result test-info">
+            ℹ️ No hay perfil en la base de datos<br>
+            <small>Completa tu perfil para probar la escritura</small>
+          </div>
+        `
+      }
+    }
+
+    updateSystemInfo()
+    updateLastTestTime()
+  } catch (error) {
+    console.error("❌ Error en prueba de conexión:", error)
+
+    if (connectionStatus) {
+      connectionStatus.innerHTML = `
+        <div class="test-result test-error">
+          ❌ Error de conexión: ${error.message}<br>
+          <small>Verifica tu configuración de Supabase</small>
+        </div>
+      `
+    }
+
+    updateSystemInfo()
+    updateLastTestTime()
+  }
+}
+
+async function testDatabaseOperations() {
+  const dbTestStatus = document.getElementById("dbTestStatus")
+
+  if (!supabase) {
+    if (dbTestStatus) {
+      dbTestStatus.innerHTML = `
+        <div class="test-result test-error">
+          ❌ Supabase no está configurado
+        </div>
+      `
+    }
+    return
+  }
+
+  if (!userState.isLoggedIn) {
+    if (dbTestStatus) {
+      dbTestStatus.innerHTML = `
+        <div class="test-result test-info">
+          ℹ️ Debes iniciar sesión para probar la base de datos
+        </div>
+      `
+    }
+    return
+  }
+
+  if (dbTestStatus) {
+    dbTestStatus.innerHTML = '<div class="test-loading">🔄 Probando operaciones de base de datos...</div>'
+  }
+
+  try {
+    // Probar lectura
+    const { data: readData, error: readError } = await supabase
+      .from("perfiles")
+      .select("*")
+      .eq("user_id", userState.supabaseUser.id)
+
+    if (readError) throw readError
+
+    // Probar escritura (actualizar timestamp)
+    const { error: writeError } = await supabase.from("perfiles").upsert(
+      {
+        user_id: userState.supabaseUser.id,
+        email: userState.email,
+        test_timestamp: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    )
+
+    if (writeError) throw writeError
+
+    if (dbTestStatus) {
+      dbTestStatus.innerHTML = `
+        <div class="test-result test-success">
+          ✅ Operaciones de base de datos exitosas<br>
+          <small>Lectura y escritura funcionando correctamente</small>
+        </div>
+      `
+    }
+  } catch (error) {
+    console.error("❌ Error en operaciones de base de datos:", error)
+
+    if (dbTestStatus) {
+      dbTestStatus.innerHTML = `
+        <div class="test-result test-error">
+          ❌ Error en base de datos: ${error.message}<br>
+          <small>Verifica los permisos de tu tabla</small>
+        </div>
+      `
+    }
+  }
+}
+
+function updateSystemInfo() {
+  const supabaseUrl = document.getElementById("supabaseUrl")
+  const clientStatus = document.getElementById("clientStatus")
+  const currentUser = document.getElementById("currentUser")
+
+  if (supabaseUrl) {
+    supabaseUrl.textContent = SUPABASE_URL || "No configurado"
+  }
+
+  if (clientStatus) {
+    clientStatus.textContent = supabase ? "Inicializado" : "No inicializado"
+  }
+
+  if (currentUser) {
+    if (userState.isLoggedIn) {
+      currentUser.textContent = userState.email
+    } else {
+      currentUser.textContent = "No autenticado"
+    }
+  }
+}
+
+function updateLastTestTime() {
+  const lastTest = document.getElementById("lastTest")
+  if (lastTest) {
+    lastTest.textContent = new Date().toLocaleString()
+  }
+}
+
+// ===== FUNCIONES DE NAVEGACIÓN =====
 function updateNavigation() {
   const navMenu = document.getElementById("navMenu")
   const mobileNavMenu = document.getElementById("mobileNavMenu")
@@ -152,225 +854,7 @@ function showSection(sectionId) {
   if (mobileNav) mobileNav.classList.remove("show")
 }
 
-// Funciones de autenticación
-function loginEmail() {
-  const email = document.getElementById("authEmail").value
-  const password = document.getElementById("authPassword").value
-  const statusElement = document.getElementById("authStatus")
-
-  clearFormErrors()
-
-  if (!email || !password) {
-    statusElement.textContent = "Por favor completa todos los campos"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  if (!validateEmail(email)) {
-    showFieldError("authEmail", "Ingresa un correo electrónico válido")
-    statusElement.textContent = "Correo electrónico no válido"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  statusElement.textContent = "Iniciando sesión..."
-  statusElement.style.color = "#00ffe0"
-
-  setTimeout(() => {
-    userState.isLoggedIn = true
-    userState.email = email
-    userState.hasProfile = true
-
-    statusElement.textContent = "✅ Sesión iniciada correctamente"
-    statusElement.style.color = "#2ecc71"
-
-    loadUserConfiguration()
-    updateNavigation()
-    showSection("analisis")
-  }, 1000)
-}
-
-function registerEmail() {
-  const email = document.getElementById("authEmail").value
-  const password = document.getElementById("authPassword").value
-  const statusElement = document.getElementById("authStatus")
-
-  clearFormErrors()
-
-  if (!email || !password) {
-    statusElement.textContent = "Por favor completa todos los campos"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  if (!validateEmail(email)) {
-    showFieldError("authEmail", "Ingresa un correo electrónico válido")
-    statusElement.textContent = "Correo electrónico no válido"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  statusElement.textContent = "Creando cuenta..."
-  statusElement.style.color = "#00ffe0"
-
-  setTimeout(() => {
-    userState.isLoggedIn = true
-    userState.email = email
-    userState.hasProfile = false
-
-    const correoUsuario = document.getElementById("correoUsuario")
-    if (correoUsuario) {
-      correoUsuario.value = email
-    }
-
-    statusElement.textContent = "✅ Cuenta creada exitosamente"
-    statusElement.style.color = "#2ecc71"
-
-    updateNavigation()
-    showSection("perfil")
-  }, 1500)
-}
-
-function loginGoogle() {
-  const statusElement = document.getElementById("authStatus")
-
-  statusElement.textContent = "Conectando con Google..."
-  statusElement.style.color = "#00ffe0"
-
-  setTimeout(() => {
-    userState.isLoggedIn = true
-    userState.email = "usuario@gmail.com"
-    userState.hasProfile = true
-
-    statusElement.textContent = "✅ Conectado con Google"
-    statusElement.style.color = "#2ecc71"
-
-    updateNavigation()
-    showSection("analisis")
-  }, 1200)
-}
-
-function loginFacebook() {
-  const statusElement = document.getElementById("authStatus")
-
-  statusElement.textContent = "Conectando con Facebook..."
-  statusElement.style.color = "#00ffe0"
-
-  setTimeout(() => {
-    userState.isLoggedIn = true
-    userState.email = "usuario@facebook.com"
-    userState.hasProfile = true
-
-    statusElement.textContent = "✅ Conectado con Facebook"
-    statusElement.style.color = "#2ecc71"
-
-    updateNavigation()
-    showSection("analisis")
-  }, 1200)
-}
-
-// Funciones de perfil
-function guardarPerfil() {
-  const nombre = document.getElementById("nombreCompleto").value
-  const correo = document.getElementById("correoUsuario").value
-  const telefono = document.getElementById("telefono").value
-  const tipoUsuario = document.getElementById("tipoUsuario").value
-  const preferenciaAnalisis = document.getElementById("preferenciaAnalisis").value
-  const notifEmail = document.getElementById("notifEmail").checked
-  const notifResultados = document.getElementById("notifResultados").checked
-  const notifActualizaciones = document.getElementById("notifActualizaciones").checked
-
-  clearFormErrors()
-
-  let hasErrors = false
-
-  if (!nombre || !correo || !tipoUsuario) {
-    alert("Por favor completa los campos obligatorios (marcados con *)")
-    return
-  }
-
-  if (!validateEmail(correo)) {
-    showFieldError("correoUsuario", "Ingresa un correo electrónico válido")
-    hasErrors = true
-  } else {
-    showFieldSuccess("correoUsuario")
-  }
-
-  if (telefono && !validatePhone(telefono)) {
-    showFieldError("telefono", "El teléfono debe tener exactamente 10 dígitos numéricos")
-    hasErrors = true
-  } else if (telefono) {
-    showFieldSuccess("telefono")
-  }
-
-  if (hasErrors) return
-
-  userState.userData = {
-    nombre,
-    correo,
-    telefono,
-    tipoUsuario,
-    preferenciaAnalisis,
-    notificaciones: {
-      email: notifEmail,
-      resultados: notifResultados,
-      actualizaciones: notifActualizaciones,
-    },
-  }
-
-  userState.hasProfile = true
-
-  const btnGuardar = document.getElementById("btnGuardarPerfil")
-  const btnEditar = document.getElementById("btnEditarPerfil")
-
-  if (btnGuardar) btnGuardar.style.display = "none"
-  if (btnEditar) btnEditar.style.display = "inline-block"
-
-  toggleProfileFields(false)
-  alert("✅ Perfil guardado exitosamente")
-
-  updateNavigation()
-  showSection("analisis")
-}
-
-function editarPerfil() {
-  const btnGuardar = document.getElementById("btnGuardarPerfil")
-  const btnEditar = document.getElementById("btnEditarPerfil")
-
-  if (btnGuardar) {
-    btnGuardar.style.display = "inline-block"
-    btnGuardar.textContent = "💾 Actualizar Perfil"
-  }
-  if (btnEditar) btnEditar.style.display = "none"
-
-  toggleProfileFields(true)
-}
-
-function toggleProfileFields(editable) {
-  const fields = [
-    "nombreCompleto",
-    "telefono",
-    "tipoUsuario",
-    "preferenciaAnalisis",
-    "notifEmail",
-    "notifResultados",
-    "notifActualizaciones",
-  ]
-
-  fields.forEach((fieldId) => {
-    const field = document.getElementById(fieldId)
-    if (field) {
-      if (fieldId === "correoUsuario") {
-        field.readOnly = true
-      } else {
-        field.readOnly = !editable
-        field.disabled = !editable
-      }
-    }
-  })
-}
-
-// Funciones de análisis de audio
+// ===== FUNCIONES DE ANÁLISIS DE AUDIO =====
 function switchTab(tabName) {
   // Ocultar todos los tabs
   document.querySelectorAll(".tab-content").forEach((tab) => {
@@ -550,7 +1034,7 @@ function analizarAudio(audioURL, audioFile) {
     })
 }
 
-// Funciones de grabación
+// ===== FUNCIONES DE GRABACIÓN =====
 function iniciarMicrofono() {
   navigator.mediaDevices
     .getUserMedia({ audio: true })
@@ -637,7 +1121,7 @@ function detenerMicrofono() {
   }
 }
 
-// Funciones de comparación
+// ===== FUNCIONES DE COMPARACIÓN =====
 function iniciarComparacion() {
   const archivoReal = document.getElementById("archivoReal").files[0]
   const archivoIA = document.getElementById("archivoIA").files[0]
@@ -788,7 +1272,7 @@ ${aiFile}: Voz sintética (${aiConfidence.toFixed(1)}% confianza)
   finalResultElement.className = `comparison-result ${resultClass}`
 }
 
-// Funciones de entrenamiento
+// ===== FUNCIONES DE ENTRENAMIENTO =====
 function switchPangramTab(tabName) {
   document.querySelectorAll(".pangram-content").forEach((tab) => {
     tab.classList.remove("active")
@@ -953,7 +1437,7 @@ function detenerGrabacionEtiquetada() {
   }
 }
 
-// Funciones auxiliares
+// ===== FUNCIONES AUXILIARES =====
 function formatTime(seconds) {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
@@ -1334,7 +1818,7 @@ function generateRealTranscription(audioFile, targetElementId) {
   }, 2000)
 }
 
-// Funciones de validación
+// ===== FUNCIONES DE VALIDACIÓN =====
 function validateEmail(email) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
@@ -1386,7 +1870,7 @@ function clearFormErrors() {
   })
 }
 
-// Funciones del menú de opciones
+// ===== FUNCIONES DEL MENÚ DE OPCIONES =====
 function toggleOptionsMenu() {
   const dropdown = document.getElementById("optionsDropdown")
   if (dropdown) dropdown.classList.toggle("show")
@@ -1411,29 +1895,7 @@ function showSettings() {
   loadCurrentConfig()
 }
 
-function logout() {
-  const dropdown = document.getElementById("optionsDropdown")
-  if (dropdown) dropdown.classList.remove("show")
-
-  if (confirm("¿Estás seguro de que quieres cerrar sesión?")) {
-    userState = {
-      isLoggedIn: false,
-      hasProfile: false,
-      email: "",
-      userData: null,
-    }
-
-    updateNavigation()
-    showSection("auth")
-
-    const authForm = document.getElementById("authForm")
-    const authStatus = document.getElementById("authStatus")
-    if (authForm) authForm.reset()
-    if (authStatus) authStatus.textContent = ""
-  }
-}
-
-// Funciones de configuración
+// ===== FUNCIONES DE CONFIGURACIÓN =====
 function loadCurrentConfig() {
   const themeSelector = document.getElementById("themeSelector")
   const languageSelector = document.getElementById("languageSelector")
@@ -1535,7 +1997,7 @@ function loadUserConfiguration() {
   }
 }
 
-// Funciones para modal de canvas
+// ===== FUNCIONES PARA MODAL DE CANVAS =====
 function expandCanvas(canvasId) {
   const originalCanvas = document.getElementById(canvasId)
   const modal = document.getElementById("canvasModal")
@@ -1557,7 +2019,7 @@ function closeModal() {
   if (modal) modal.style.display = "none"
 }
 
-// Funciones de navegación móvil
+// ===== FUNCIONES DE NAVEGACIÓN MÓVIL =====
 function toggleMobileMenu() {
   const mobileNav = document.getElementById("mobileNav")
   if (mobileNav) {
@@ -1580,7 +2042,7 @@ function togglePasswordVisibility() {
   }
 }
 
-// Setup functions
+// ===== SETUP FUNCTIONS =====
 function setupFileInputs() {
   const fileInputs = [
     { input: "archivoAudio", status: "archivoAudioStatus" },
@@ -1608,67 +2070,4 @@ function setupPangramListeners() {
 }
 
 function setupMobileNavigation() {
-  const mobileMenuBtn = document.getElementById("mobileMenuBtn")
-  if (mobileMenuBtn) {
-    mobileMenuBtn.addEventListener("click", toggleMobileMenu)
-  }
-
-  // Cerrar menú móvil al hacer clic en un enlace
-  document.addEventListener("click", (e) => {
-    if (e.target.classList.contains("nav-link")) {
-      const mobileNav = document.getElementById("mobileNav")
-      if (mobileNav) mobileNav.classList.remove("show")
-    }
-  })
-
-  // Cerrar menú de opciones al hacer clic fuera
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".options-menu")) {
-      const dropdown = document.getElementById("optionsDropdown")
-      if (dropdown) dropdown.classList.remove("show")
-    }
-  })
-}
-
-function setupValidation() {
-  const correoField = document.getElementById("correoUsuario")
-  const telefonoField = document.getElementById("telefono")
-  const authEmailField = document.getElementById("authEmail")
-
-  if (correoField) {
-    correoField.addEventListener("blur", function () {
-      if (this.value && !validateEmail(this.value)) {
-        showFieldError("correoUsuario", "Ingresa un correo electrónico válido")
-      } else if (this.value) {
-        showFieldSuccess("correoUsuario")
-      }
-    })
-  }
-
-  if (telefonoField) {
-    telefonoField.addEventListener("input", function () {
-      this.value = this.value.replace(/\D/g, "")
-      if (this.value.length > 10) {
-        this.value = this.value.slice(0, 10)
-      }
-    })
-
-    telefonoField.addEventListener("blur", function () {
-      if (this.value && !validatePhone(this.value)) {
-        showFieldError("telefono", "El teléfono debe tener exactamente 10 dígitos")
-      } else if (this.value) {
-        showFieldSuccess("telefono")
-      }
-    })
-  }
-
-  if (authEmailField) {
-    authEmailField.addEventListener("blur", function () {
-      if (this.value && !validateEmail(this.value)) {
-        showFieldError("authEmail", "Ingresa un correo electrónico válido")
-      } else if (this.value) {
-        showFieldSuccess("authEmail")
-      }
-    })
-  }
-}
+  const m
