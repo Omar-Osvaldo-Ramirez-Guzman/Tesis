@@ -1,736 +1,592 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VozCheck - Detector de Voz IA Avanzado</title>
-    <link rel="stylesheet" href="css/style.css">
-    <!-- Cargar Supabase ANTES que nuestro script -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Detector de Voz IA vs Real</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Comic+Relief:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <h1>🎤 VozCheck</h1>
-                    <span class="version">v2.0</span>
-                </div>
-                
-                <!-- Navegación Desktop -->
-                <nav class="nav-desktop">
-                    <ul id="navMenu">
-                        <li><a href="#auth" class="nav-link active" onclick="showSection('auth')">Acceso</a></li>
-                    </ul>
-                </nav>
+  <header>
+    <nav>
+      <h1>🔍 VozCheck</h1>
+      <ul id="navMenu">
+        <li><a href="#auth" class="nav-link active">Acceso</a></li>
+        <!-- Las siguientes pestañas se mostrarán dinámicamente -->
+      </ul>
+      <!-- Menú de opciones (solo visible después del login) -->
+      <div class="options-menu" id="optionsMenu" style="display:none;">
+        <button class="options-btn" onclick="toggleOptionsMenu()">⚙️</button>
+        <div class="options-dropdown" id="optionsDropdown">
+          <a href="#" onclick="showProfile()">👤 Perfil</a>
+          <a href="#" onclick="showAccount()">🔐 Cuenta</a>
+          <a href="#" onclick="showSettings()">⚙️ Configuración</a>
+          <a href="#" onclick="logout()">🚪 Cerrar Sesión</a>
+        </div>
+      </div>
+    </nav>
+  </header>
 
-                <!-- Menú de opciones -->
-                <div class="options-menu" id="optionsMenu" style="display: none;">
-                    <button class="options-btn" onclick="toggleOptionsMenu()">⚙️</button>
-                    <div class="options-dropdown" id="optionsDropdown">
-                        <a href="#" onclick="showProfile()">👤 Mi Perfil</a>
-                        <a href="#" onclick="showAccount()">🔧 Mi Cuenta</a>
-                        <a href="#" onclick="showSettings()">⚙️ Configuración</a>
-                        <a href="#" onclick="testSupabaseConnection()">🔗 Probar Conexión</a>
-                        <a href="#" onclick="logout()">🚪 Cerrar Sesión</a>
-                    </div>
-                </div>
-
-                <!-- Botón menú móvil -->
-                <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+  <main>
+    <!-- Sección de Análisis Individual -->
+    <section id="analisis" class="pantalla oculto">
+      <div class="container">
+        <h2>🎤 Análisis Individual de Voz</h2>
+        <div class="analysis-description">
+          <p>Analiza un archivo de audio o graba tu voz para determinar si es generada por IA o es una voz real.</p>
+        </div>
+        
+        <div class="botonera bloque">
+          <div class="control">
+            <label><input type="checkbox" id="modoTiempoReal"> Tiempo Real</label>
+          </div>
+          <div class="control">
+            <div class="file-input-container">
+              <label for="archivoAudio" class="file-label">
+                📁 Seleccionar archivo de audio
+                <span class="file-hint">Formatos: MP3, WAV | Duración: 20-30 seg</span>
+              </label>
+              <input type="file" id="archivoAudio" accept=".mp3,.wav,audio/mp3,audio/wav" class="file-input">
+              <div class="file-status" id="archivoAudioStatus"></div>
             </div>
+          </div>
+          <div class="control">
+            <button onclick="iniciarAnalisis()">🔍 Analizar Audio</button>
+          </div>
+          <div class="control" id="micControls" style="display:none;">
+            <div class="recording-timer" id="recordingTimer" style="display:none;">
+              <div class="timer-display">
+                <span class="timer-label">🎙️ GRABANDO</span>
+                <span class="timer-value" id="cronometro">00:00</span>
+              </div>
+              <div class="recording-indicator"></div>
+            </div>
+            <button onclick="iniciarMicrofono()" class="record-btn">🎙️ Iniciar Micrófono</button>
+            <button onclick="detenerMicrofono()" class="stop-btn">🛑 Detener Micrófono</button>
+          </div>
+        </div>
+        
+        <div class="canvas-container">
+          <div class="canvas-wrapper">
+            <canvas id="waveformCanvas" width="800" height="200"></canvas>
+            <button class="expand-btn" onclick="expandCanvas('waveformCanvas')">🔍</button>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="spectrumCanvas" width="800" height="150"></canvas>
+            <button class="expand-btn" onclick="expandCanvas('spectrumCanvas')">🔍</button>
+          </div>
+        </div>
+        
+        <div id="resultado"></div>
+        
+        <!-- Transcripción del análisis -->
+        <div id="transcripcionAnalisis" class="transcripcion-container" style="display:none;">
+          <h3>📝 Transcripción</h3>
+          <div class="transcripcion-content" id="transcripcionAnalisisContent">
+            Procesando transcripción...
+          </div>
         </div>
 
-        <!-- Navegación móvil -->
-        <nav class="nav-mobile" id="mobileNav">
-            <ul id="mobileNavMenu">
-                <li><a href="#auth" class="nav-link active" onclick="showSection('auth')">Acceso</a></li>
-            </ul>
-        </nav>
-    </header>
-
-    <!-- Contenido Principal -->
-    <main class="main">
-        <div class="container">
-            
-            <!-- Pantalla de Autenticación -->
-            <section id="auth" class="pantalla">
-                <div class="auth-container">
-                    <div class="auth-header">
-                        <h2>🔐 Acceso a VozCheck</h2>
-                        <p>Inicia sesión o crea una cuenta para comenzar</p>
-                    </div>
-
-                    <form id="authForm" class="auth-form">
-                        <div class="form-group">
-                            <label for="authEmail">📧 Correo Electrónico</label>
-                            <input type="email" id="authEmail" placeholder="tu@email.com" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="authPassword">🔒 Contraseña</label>
-                            <div class="password-input">
-                                <input type="password" id="authPassword" placeholder="Tu contraseña" required>
-                                <button type="button" class="password-toggle" onclick="togglePasswordVisibility()">
-                                    <span id="passwordToggleIcon">👁️</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="auth-buttons">
-                            <button type="button" class="btn btn-primary" onclick="loginEmail()">
-                                🚀 Iniciar Sesión
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick="registerEmail()">
-                                ✨ Crear Cuenta
-                            </button>
-                        </div>
-
-                        <div class="auth-divider">
-                            <span>o continúa con</span>
-                        </div>
-
-                        <div class="social-buttons">
-                            <button type="button" class="btn btn-google" onclick="loginGoogle()">
-                                🔴 Google
-                            </button>
-                            <button type="button" class="btn btn-facebook" onclick="loginFacebook()">
-                                🔵 Facebook
-                            </button>
-                        </div>
-
-                        <div id="authStatus" class="auth-status"></div>
-                    </form>
-                </div>
-            </section>
-
-            <!-- Pantalla de Perfil -->
-            <section id="perfil" class="pantalla oculto">
-                <div class="profile-container">
-                    <div class="profile-header">
-                        <h2>👤 Mi Perfil</h2>
-                        <p>Completa tu información para acceder a todas las funciones</p>
-                    </div>
-
-                    <form class="profile-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="nombreCompleto">👤 Nombre Completo *</label>
-                                <input type="text" id="nombreCompleto" placeholder="Tu nombre completo" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="correoUsuario">📧 Correo Electrónico *</label>
-                                <input type="email" id="correoUsuario" placeholder="tu@email.com" readonly>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="telefono">📱 Teléfono</label>
-                                <input type="tel" id="telefono" placeholder="1234567890" maxlength="10">
-                            </div>
-                            <div class="form-group">
-                                <label for="tipoUsuario">🎯 Tipo de Usuario *</label>
-                                <select id="tipoUsuario" required>
-                                    <option value="">Selecciona...</option>
-                                    <option value="investigador">🔬 Investigador</option>
-                                    <option value="periodista">📰 Periodista</option>
-                                    <option value="empresa">🏢 Empresa</option>
-                                    <option value="estudiante">🎓 Estudiante</option>
-                                    <option value="particular">👤 Particular</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="preferenciaAnalisis">⚙️ Preferencia de Análisis</label>
-                            <select id="preferenciaAnalisis">
-                                <option value="basico">🔍 Básico</option>
-                                <option value="avanzado">🧠 Avanzado</option>
-                                <option value="experto">🎯 Experto</option>
-                            </select>
-                        </div>
-
-                        <div class="form-section">
-                            <h3>🔔 Notificaciones</h3>
-                            <div class="checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="notifEmail" checked>
-                                    <span class="checkmark"></span>
-                                    📧 Notificaciones por email
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="notifResultados">
-                                    <span class="checkmark"></span>
-                                    📊 Resultados de análisis
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="notifActualizaciones">
-                                    <span class="checkmark"></span>
-                                    🔄 Actualizaciones del sistema
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="button" id="btnGuardarPerfil" class="btn btn-primary" onclick="guardarPerfil()">
-                                💾 Guardar Perfil
-                            </button>
-                            <button type="button" id="btnEditarPerfil" class="btn btn-secondary" onclick="editarPerfil()" style="display: none;">
-                                ✏️ Editar Perfil
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </section>
-
-            <!-- Pantalla de Análisis -->
-            <section id="analisis" class="pantalla oculto">
-                <div class="analysis-container">
-                    <div class="section-header">
-                        <h2>🎤 Análisis de Voz</h2>
-                        <p>Analiza archivos de audio o graba directamente para detectar voces generadas por IA</p>
-                    </div>
-
-                    <div class="tabs">
-                        <button class="tab-btn active" onclick="switchTab('archivo')">📁 Archivo</button>
-                        <button class="tab-btn" onclick="switchTab('microfono')">🎙️ Micrófono</button>
-                    </div>
-
-                    <!-- Tab de Archivo -->
-                    <div id="archivoTab" class="tab-content active">
-                        <div class="upload-section">
-                            <div class="file-upload">
-                                <label for="archivoAudio" class="file-label">
-                                    <div class="file-icon">📎</div>
-                                    <div class="file-text">
-                                        <strong>Seleccionar archivo de audio</strong>
-                                        <span>MP3, WAV (máx. 50MB)</span>
-                                    </div>
-                                </label>
-                                <input type="file" id="archivoAudio" accept=".mp3,.wav,audio/*" hidden>
-                                <div id="archivoAudioStatus" class="file-status"></div>
-                            </div>
-                            <button class="btn btn-primary" onclick="iniciarAnalisis()">
-                                🔍 Analizar Audio
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Tab de Micrófono -->
-                    <div id="microfonoTab" class="tab-content">
-                        <div class="recording-section">
-                            <div class="recording-controls">
-                                <button id="startRecordBtn" class="btn btn-record" onclick="iniciarMicrofono()">
-                                    🎙️ Iniciar Grabación
-                                </button>
-                                <button id="stopRecordBtn" class="btn btn-stop" onclick="detenerMicrofono()" style="display: none;">
-                                    ⏹️ Detener
-                                </button>
-                            </div>
-
-                            <div id="recordingTimer" class="recording-timer" style="display: none;">
-                                <div class="timer-display">
-                                    <span id="cronometro">00:00</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div id="recordingProgress" class="progress-fill"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Contenedor de Visualización -->
-                    <div id="visualizationContainer" class="visualization-container" style="display: none;">
-                        <div class="visualization-grid">
-                            <div class="canvas-container">
-                                <h4>📊 Forma de Onda</h4>
-                                <canvas id="waveformCanvas" width="600" height="200" onclick="expandCanvas('waveformCanvas')"></canvas>
-                            </div>
-                            <div class="canvas-container">
-                                <h4>🌈 Espectro de Frecuencias</h4>
-                                <canvas id="spectrumCanvas" width="600" height="200" onclick="expandCanvas('spectrumCanvas')"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Transcripción -->
-                    <div id="transcripcionAnalisis" class="transcription-container" style="display: none;">
-                        <h4>📝 Transcripción del Audio</h4>
-                        <div id="transcripcionAnalisisContent" class="transcription-content">
-                            Procesando transcripción...
-                        </div>
-                    </div>
-
-                    <!-- Análisis Individual -->
-                    <div id="audioAnalysisIndividual" class="analysis-details" style="display: none;">
-                        <h4>🔬 Análisis Detallado</h4>
-                        <div class="analysis-grid">
-                            <div class="analysis-item">
-                                <span class="analysis-label">Frecuencia Fundamental:</span>
-                                <span id="fundamentalFreq" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Amplitud Máxima:</span>
-                                <span id="maxAmplitude" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Amplitud Mínima:</span>
-                                <span id="minAmplitude" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Duración Total:</span>
-                                <span id="totalDuration" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Frecuencia Dominante:</span>
-                                <span id="dominantFreq" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Valor RMS:</span>
-                                <span id="rmsValue" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Ciclos por Segundo:</span>
-                                <span id="cyclesPerSec" class="analysis-value">-</span>
-                            </div>
-                            <div class="analysis-item">
-                                <span class="analysis-label">Rango Dinámico:</span>
-                                <span id="dynamicRange" class="analysis-value">-</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Resultado -->
-                    <div id="resultado" class="result-container" style="display: none;">
-                        <!-- Los resultados se mostrarán aquí -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- Pantalla de Comparación -->
-            <section id="comparacion" class="pantalla oculto">
-                <div class="comparison-container">
-                    <div class="section-header">
-                        <h2>🆚 Comparación de Audios</h2>
-                        <p>Compara dos archivos de audio para análisis detallado</p>
-                    </div>
-
-                    <div class="comparison-upload">
-                        <div class="upload-pair">
-                            <div class="file-upload">
-                                <label for="archivoReal" class="file-label real">
-                                    <div class="file-icon">🎤</div>
-                                    <div class="file-text">
-                                        <strong>Audio 1 (Referencia)</strong>
-                                        <span>MP3, WAV (máx. 50MB)</span>
-                                    </div>
-                                </label>
-                                <input type="file" id="archivoReal" accept=".mp3,.wav,audio/*" hidden>
-                                <div id="archivoRealStatus" class="file-status"></div>
-                            </div>
-
-                            <div class="vs-divider">🆚</div>
-
-                            <div class="file-upload">
-                                <label for="archivoIA" class="file-label ia">
-                                    <div class="file-icon">🤖</div>
-                                    <div class="file-text">
-                                        <strong>Audio 2 (Comparar)</strong>
-                                        <span>MP3, WAV (máx. 50MB)</span>
-                                    </div>
-                                </label>
-                                <input type="file" id="archivoIA" accept=".mp3,.wav,audio/*" hidden>
-                                <div id="archivoIAStatus" class="file-status"></div>
-                            </div>
-                        </div>
-
-                        <button class="btn btn-primary" onclick="iniciarComparacion()">
-                            🔍 Iniciar Comparación
-                        </button>
-                    </div>
-
-                    <!-- Detección Inteligente -->
-                    <div id="aiDetectionResults" class="ai-detection-container" style="display: none;">
-                        <h4>🧠 Detección Inteligente de IA</h4>
-                        <div class="detection-grid">
-                            <div id="audio1Detection" class="detection-item">
-                                <h5>Audio 1</h5>
-                                <div id="result1" class="detection-result">Analizando...</div>
-                                <div class="confidence-bar">
-                                    <div id="confidence1" class="confidence-fill"></div>
-                                </div>
-                                <div id="confidenceText1" class="confidence-text">-</div>
-                            </div>
-                            <div id="audio2Detection" class="detection-item">
-                                <h5>Audio 2</h5>
-                                <div id="result2" class="detection-result">Analizando...</div>
-                                <div class="confidence-bar">
-                                    <div id="confidence2" class="confidence-fill"></div>
-                                </div>
-                                <div id="confidenceText2" class="confidence-text">-</div>
-                            </div>
-                        </div>
-                        <div id="finalResult" class="comparison-result">
-                            Procesando análisis comparativo...
-                        </div>
-                    </div>
-
-                    <!-- Transcripciones -->
-                    <div id="transcripcionComparacion" class="transcription-comparison" style="display: none;">
-                        <h4>📝 Transcripciones</h4>
-                        <div class="transcription-grid">
-                            <div class="transcription-item">
-                                <h5>🎤 Audio 1</h5>
-                                <div id="transcripcionRealContent" class="transcription-content">
-                                    Procesando transcripción...
-                                </div>
-                            </div>
-                            <div class="transcription-item">
-                                <h5>🤖 Audio 2</h5>
-                                <div id="transcripcionIAContent" class="transcription-content">
-                                    Procesando transcripción...
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Canvas de Comparación -->
-                    <div id="comparisonCanvasGrid" class="comparison-canvas-grid" style="display: none;">
-                        <div class="canvas-container">
-                            <h4>📊 Superposición</h4>
-                            <canvas id="overlayCanvas" width="600" height="200" onclick="expandCanvas('overlayCanvas')"></canvas>
-                        </div>
-                        <div class="canvas-container">
-                            <h4>🎤 Audio 1</h4>
-                            <canvas id="realCanvas" width="600" height="150" onclick="expandCanvas('realCanvas')"></canvas>
-                        </div>
-                        <div class="canvas-container">
-                            <h4>🤖 Audio 2</h4>
-                            <canvas id="iaCanvas" width="600" height="150" onclick="expandCanvas('iaCanvas')"></canvas>
-                        </div>
-                        <div class="canvas-container">
-                            <h4>🌈 Análisis Espectral</h4>
-                            <canvas id="spectralCanvas" width="600" height="200" onclick="expandCanvas('spectralCanvas')"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Análisis Comparativo -->
-                    <div id="audioAnalysisComparativo" class="analysis-comparative" style="display: none;">
-                        <h4>🔬 Análisis Comparativo</h4>
-                        <div class="comparative-grid">
-                            <div class="comparative-section">
-                                <h5>🎤 Audio 1</h5>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Frecuencia Fundamental:</span>
-                                    <span id="fundamentalFreqReal" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Amplitud Máxima:</span>
-                                    <span id="maxAmplitudeReal" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Valor RMS:</span>
-                                    <span id="rmsValueReal" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Rango Dinámico:</span>
-                                    <span id="dynamicRangeReal" class="analysis-value">-</span>
-                                </div>
-                            </div>
-
-                            <div class="comparative-section">
-                                <h5>🤖 Audio 2</h5>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Frecuencia Fundamental:</span>
-                                    <span id="fundamentalFreqIa" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Amplitud Máxima:</span>
-                                    <span id="maxAmplitudeIa" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Valor RMS:</span>
-                                    <span id="rmsValueIa" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Rango Dinámico:</span>
-                                    <span id="dynamicRangeIa" class="analysis-value">-</span>
-                                </div>
-                            </div>
-
-                            <div class="similarity-section">
-                                <h5>📊 Similitudes</h5>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Similitud de Frecuencia:</span>
-                                    <span id="freqSimilarity" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Similitud de Amplitud:</span>
-                                    <span id="ampSimilarity" class="analysis-value">-</span>
-                                </div>
-                                <div class="analysis-item">
-                                    <span class="analysis-label">Similitud General:</span>
-                                    <span id="generalSimilarity" class="analysis-value">-</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Pantalla de Entrenamiento -->
-            <section id="entrenamientoMic" class="pantalla oculto">
-                <div class="training-container">
-                    <div class="section-header">
-                        <h2>🧠 Entrenamiento del Modelo</h2>
-                        <p>Mejora la precisión del detector grabando muestras de voz etiquetadas</p>
-                    </div>
-
-                    <!-- Selección de Pangramas -->
-                    <div class="pangram-selection">
-                        <h3>📝 Selecciona un Pangrama</h3>
-                        <div class="pangram-tabs">
-                            <button class="tab-btn active" onclick="switchPangramTab('espanol')">🇪🇸 Español</button>
-                            <button class="tab-btn" onclick="switchPangramTab('ingles')">🇺🇸 Inglés</button>
-                            <button class="tab-btn" onclick="switchPangramTab('frances')">🇫🇷 Francés</button>
-                        </div>
-
-                        <div id="espanolTab" class="pangram-content active">
-                            <div class="pangram-grid">
-                                <div class="pangram-item" data-pangram="El veloz murciélago hindú comía feliz cardillo y kiwi. La cigüeña tocaba el saxofón detrás del palenque de paja." onclick="selectPangram(this)">
-                                    "El veloz murciélago hindú comía feliz cardillo y kiwi. La cigüeña tocaba el saxofón detrás del palenque de paja."
-                                </div>
-                                <div class="pangram-item" data-pangram="Benjamín pidió una bebida de kiwi y fresa; Noé, sin vergüenza, la más exquisita champaña del menú." onclick="selectPangram(this)">
-                                    "Benjamín pidió una bebida de kiwi y fresa; Noé, sin vergüenza, la más exquisita champaña del menú."
-                                </div>
-                                <div class="pangram-item" data-pangram="Fabio me exige, sin tapujos, que añada cerveza al whisky." onclick="selectPangram(this)">
-                                    "Fabio me exige, sin tapujos, que añada cerveza al whisky."
-                                </div>
-                                <div class="pangram-item" data-pangram="Jovencillo emponzoñado de whisky, ¡qué figurota exhibe!" onclick="selectPangram(this)">
-                                    "Jovencillo emponzoñado de whisky, ¡qué figurota exhibe!"
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="inglesTab" class="pangram-content">
-                            <div class="pangram-grid">
-                                <div class="pangram-item" data-pangram="The quick brown fox jumps over the lazy dog." onclick="selectPangram(this)">
-                                    "The quick brown fox jumps over the lazy dog."
-                                </div>
-                                <div class="pangram-item" data-pangram="Pack my box with five dozen liquor jugs." onclick="selectPangram(this)">
-                                    "Pack my box with five dozen liquor jugs."
-                                </div>
-                                <div class="pangram-item" data-pangram="Waltz, bad nymph, for quick jigs vex." onclick="selectPangram(this)">
-                                    "Waltz, bad nymph, for quick jigs vex."
-                                </div>
-                                <div class="pangram-item" data-pangram="Sphinx of black quartz, judge my vow." onclick="selectPangram(this)">
-                                    "Sphinx of black quartz, judge my vow."
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="francesTab" class="pangram-content">
-                            <div class="pangram-grid">
-                                <div class="pangram-item" data-pangram="Portez ce vieux whisky au juge blond qui fume." onclick="selectPangram(this)">
-                                    "Portez ce vieux whisky au juge blond qui fume."
-                                </div>
-                                <div class="pangram-item" data-pangram="Voix ambiguë d'un cœur qui au zéphyr préfère les jattes de kiwi." onclick="selectPangram(this)">
-                                    "Voix ambiguë d'un cœur qui au zéphyr préfère les jattes de kiwi."
-                                </div>
-                                <div class="pangram-item" data-pangram="Buvez de ce whisky que le patron juge fameux." onclick="selectPangram(this)">
-                                    "Buvez de ce whisky que le patron juge fameux."
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Pangrama Seleccionado -->
-                    <div id="selectedPangram" class="selected-pangram" style="display: none;">
-                        <h4>📝 Pangrama Seleccionado:</h4>
-                        <div id="pangramDisplay" class="pangram-display"></div>
-                    </div>
-
-                    <!-- Grabación de Entrenamiento -->
-                    <div id="trainingRecording" class="training-recording" style="display: none;">
-                        <div class="recording-controls">
-                            <button id="startTrainingBtn" class="btn btn-record" onclick="iniciarGrabacionEtiquetada('real')">
-                                🎙️ Iniciar Grabación
-                            </button>
-                            <button id="stopTrainingBtn" class="btn btn-stop" onclick="detenerGrabacionEtiquetada()" style="display: none;">
-                                ⏹️ Detener Grabación
-                            </button>
-                        </div>
-
-                        <!-- Timer de Entrenamiento -->
-                        <div id="trainingTimer" class="training-timer" style="display: none;">
-                            <div class="timer-linear">
-                                <span id="timerLinear">00:00</span>
-                                <div class="progress-container">
-                                    <div id="progressBar" class="progress-bar-fill"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Visualización de Grabación -->
-                        <div id="recordingVisualization" class="recording-visualization" style="display: none;">
-                            <h4>📊 Visualización en Tiempo Real</h4>
-                            <canvas id="recordingCanvas" width="600" height="150"></canvas>
-                        </div>
-
-                        <!-- Estado del Entrenamiento -->
-                        <div id="estadoEntrenamiento" class="training-status"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Pantalla de Configuración -->
-            <section id="configuracion" class="pantalla oculto">
-                <div class="config-container">
-                    <div class="section-header">
-                        <h2>⚙️ Configuración</h2>
-                        <p>Personaliza la apariencia y comportamiento de VozCheck</p>
-                    </div>
-
-                    <div class="config-sections">
-                        <!-- Tema -->
-                        <div class="config-section">
-                            <h3>🎨 Apariencia</h3>
-                            <div class="config-item">
-                                <label for="themeSelector">Tema:</label>
-                                <select id="themeSelector" onchange="changeTheme()">
-                                    <option value="dark">🌙 Oscuro</option>
-                                    <option value="light">☀️ Claro</option>
-                                </select>
-                            </div>
-                            <div class="config-item">
-                                <label for="languageSelector">Idioma:</label>
-                                <select id="languageSelector" onchange="changeLanguage()">
-                                    <option value="es">🇪🇸 Español</option>
-                                    <option value="en">🇺🇸 English</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Colores de Gráficos -->
-                        <div class="config-section">
-                            <h3>🎨 Colores de Gráficos</h3>
-                            <div class="color-config">
-                                <div class="color-item">
-                                    <label for="graphColorReal">🎤 Voz Real:</label>
-                                    <input type="color" id="graphColorReal" value="#4A90E2" onchange="updateGraphColors()">
-                                    <div id="realPreview" class="color-preview"></div>
-                                </div>
-                                <div class="color-item">
-                                    <label for="graphColorIA">🤖 Voz IA:</label>
-                                    <input type="color" id="graphColorIA" value="#E74C3C" onchange="updateGraphColors()">
-                                    <div id="iaPreview" class="color-preview"></div>
-                                </div>
-                                <div class="color-item">
-                                    <label for="graphColorGeneral">⚡ General:</label>
-                                    <input type="color" id="graphColorGeneral" value="#00FFE0" onchange="updateGraphColors()">
-                                    <div id="generalPreview" class="color-preview"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Acciones -->
-                        <div class="config-actions">
-                            <button class="btn btn-primary" onclick="saveConfiguration()">
-                                💾 Guardar Configuración
-                            </button>
-                            <button class="btn btn-secondary" onclick="resetConfiguration()">
-                                🔄 Restablecer
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Pantalla de Conexión -->
-            <section id="conexion" class="pantalla oculto">
-                <div class="connection-container">
-                    <div class="section-header">
-                        <h2>🔗 Prueba de Conexión Supabase</h2>
-                        <p>Verifica que la integración con Supabase esté funcionando correctamente</p>
-                    </div>
-
-                    <div class="connection-tests">
-                        <!-- Información del Sistema -->
-                        <div class="test-section">
-                            <h3>📊 Información del Sistema</h3>
-                            <div class="system-info">
-                                <div class="info-item">
-                                    <span class="info-label">URL de Supabase:</span>
-                                    <span id="supabaseUrl" class="info-value">-</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Estado del Cliente:</span>
-                                    <span id="clientStatus" class="info-value">-</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Usuario Actual:</span>
-                                    <span id="currentUser" class="info-value">-</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Última Prueba:</span>
-                                    <span id="lastTest" class="info-value">-</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Pruebas de Conexión -->
-                        <div class="test-section">
-                            <h3>🔍 Pruebas de Conexión</h3>
-                            
-                            <div class="test-item">
-                                <h4>🌐 Conexión General</h4>
-                                <div id="connectionStatus" class="test-status">
-                                    <div class="test-info">Haz clic en "Probar Conexión" para verificar</div>
-                                </div>
-                            </div>
-
-                            <div class="test-item">
-                                <h4>🔐 Autenticación</h4>
-                                <div id="authTestStatus" class="test-status">
-                                    <div class="test-info">Estado de autenticación se mostrará aquí</div>
-                                </div>
-                            </div>
-
-                            <div class="test-item">
-                                <h4>💾 Base de Datos</h4>
-                                <div id="dbTestStatus" class="test-status">
-                                    <div class="test-info">Pruebas de base de datos se mostrarán aquí</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Botones de Prueba -->
-                        <div class="test-actions">
-                            <button class="btn btn-primary" onclick="testSupabaseConnection()">
-                                🔍 Probar Conexión
-                            </button>
-                            <button class="btn btn-secondary" onclick="testDatabaseOperations()">
-                                💾 Probar Base de Datos
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
+        <!-- Análisis detallado individual -->
+        <div class="audio-analysis-details" id="audioAnalysisIndividual" style="display:none;">
+          <h4>📊 Análisis Detallado del Audio</h4>
+          <div class="analysis-grid">
+            <div class="analysis-item">
+              <span class="analysis-label">Frecuencia Fundamental:</span>
+              <span class="analysis-value" id="fundamentalFreq">-- Hz</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">Amplitud Máxima:</span>
+              <span class="analysis-value" id="maxAmplitude">--</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">Amplitud Mínima:</span>
+              <span class="analysis-value" id="minAmplitude">--</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">Duración Total:</span>
+              <span class="analysis-value" id="totalDuration">-- seg</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">Frecuencia Dominante:</span>
+              <span class="analysis-value" id="dominantFreq">-- Hz</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">RMS (Potencia):</span>
+              <span class="analysis-value" id="rmsValue">--</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">Ciclos por Segundo:</span>
+              <span class="analysis-value" id="cyclesPerSec">--</span>
+            </div>
+            <div class="analysis-item">
+              <span class="analysis-label">Rango Dinámico:</span>
+              <span class="analysis-value" id="dynamicRange">-- dB</span>
+            </div>
+          </div>
         </div>
-    </main>
+      </div>
+    </section>
 
-    <!-- Modal para Canvas Expandido -->
-    <div id="canvasModal" class="modal" onclick="closeModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <canvas id="expandedCanvas"></canvas>
+    <!-- Sección de Comparación de Voces -->
+    <section id="comparacion" class="pantalla oculto">
+      <div class="container">
+        <h2>🆚 Comparación de Voces</h2>
+        <div class="analysis-description">
+          <p>Compara dos archivos de audio para analizar las diferencias entre una voz real y una voz generada por IA.</p>
         </div>
+
+        <div class="upload-controls">
+          <div class="upload-group">
+            <div class="file-input-container">
+              <label for="archivoReal" class="file-label">
+                🎤 Cargar voz real
+                <span class="file-hint">Formatos: MP3, WAV | Duración: 20-30 seg</span>
+              </label>
+              <input type="file" id="archivoReal" accept=".mp3,.wav,audio/mp3,audio/wav" class="file-input">
+              <div class="file-status" id="archivoRealStatus"></div>
+            </div>
+          </div>
+          <div class="upload-group">
+            <div class="file-input-container">
+              <label for="archivoIA" class="file-label">
+                🤖 Cargar voz IA
+                <span class="file-hint">Formatos: MP3, WAV | Duración: 20-30 seg</span>
+              </label>
+              <input type="file" id="archivoIA" accept=".mp3,.wav,audio/mp3,audio/wav" class="file-input">
+              <div class="file-status" id="archivoIAStatus"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="compare-button-container">
+          <button onclick="iniciarComparacion()">🔍 Comparar Voces</button>
+        </div>
+        
+        <div class="legend">
+          <p><strong>Voz real:</strong> <span class="color-blue">azul</span> &nbsp;&nbsp; <strong>Voz IA:</strong> <span class="color-red">rojo</span></p>
+        </div>
+        
+        <!-- Transcripción de la comparación -->
+        <div id="transcripcionComparacion" class="transcripcion-container" style="display:none;">
+          <h3>📝 Transcripciones Comparativas</h3>
+          <div class="transcripcion-grid">
+            <div class="transcripcion-item">
+              <h4>Voz Real</h4>
+              <div class="transcripcion-content" id="transcripcionRealContent">
+                Procesando transcripción...
+              </div>
+            </div>
+            <div class="transcripcion-item">
+              <h4>Voz IA</h4>
+              <div class="transcripcion-content" id="transcripcionIAContent">
+                Procesando transcripción...
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="comparison-canvas-grid" id="comparisonCanvasGrid" style="display:none;">
+          <div class="canvas-item">
+            <h4>Señales Superpuestas</h4>
+            <div class="canvas-wrapper">
+              <canvas id="overlayCanvas" width="400" height="200"></canvas>
+              <button class="expand-btn" onclick="expandCanvas('overlayCanvas')">🔍</button>
+            </div>
+          </div>
+          <div class="canvas-item">
+            <h4>Voz Real</h4>
+            <div class="canvas-wrapper">
+              <canvas id="realCanvas" width="400" height="200"></canvas>
+              <button class="expand-btn" onclick="expandCanvas('realCanvas')">🔍</button>
+            </div>
+          </div>
+          <div class="canvas-item">
+            <h4>Voz IA</h4>
+            <div class="canvas-wrapper">
+              <canvas id="iaCanvas" width="400" height="200"></canvas>
+              <button class="expand-btn" onclick="expandCanvas('iaCanvas')">🔍</button>
+            </div>
+          </div>
+          <div class="canvas-item">
+            <h4>Análisis Espectral</h4>
+            <div class="canvas-wrapper">
+              <canvas id="spectralCanvas" width="400" height="200"></canvas>
+              <button class="expand-btn" onclick="expandCanvas('spectralCanvas')">🔍</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Análisis comparativo -->
+        <div class="audio-analysis-details" id="audioAnalysisComparativo" style="display:none;">
+          <h4>🆚 Análisis Comparativo de Voces</h4>
+          <div class="comparative-analysis">
+            <div class="analysis-column">
+              <h5>🎤 Voz Real</h5>
+              <div class="analysis-grid">
+                <div class="analysis-item">
+                  <span class="analysis-label">Frecuencia Fundamental:</span>
+                  <span class="analysis-value" id="fundamentalFreqReal">-- Hz</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-label">Amplitud Máxima:</span>
+                  <span class="analysis-value" id="maxAmplitudeReal">--</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-label">RMS (Potencia):</span>
+                  <span class="analysis-value" id="rmsValueReal">--</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-label">Rango Dinámico:</span>
+                  <span class="analysis-value" id="dynamicRangeReal">-- dB</span>
+                </div>
+              </div>
+            </div>
+            <div class="analysis-column">
+              <h5>🤖 Voz IA</h5>
+              <div class="analysis-grid">
+                <div class="analysis-item">
+                  <span class="analysis-label">Frecuencia Fundamental:</span>
+                  <span class="analysis-value" id="fundamentalFreqIA">-- Hz</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-label">Amplitud Máxima:</span>
+                  <span class="analysis-value" id="maxAmplitudeIA">--</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-label">RMS (Potencia):</span>
+                  <span class="analysis-value" id="rmsValueIA">--</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-label">Rango Dinámico:</span>
+                  <span class="analysis-value" id="dynamicRangeIA">-- dB</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="similarity-analysis">
+            <h5>📈 Índices de Similitud</h5>
+            <div class="analysis-grid">
+              <div class="analysis-item">
+                <span class="analysis-label">Similitud Frecuencial:</span>
+                <span class="analysis-value" id="freqSimilarity">--%</span>
+              </div>
+              <div class="analysis-item">
+                <span class="analysis-label">Similitud de Amplitud:</span>
+                <span class="analysis-value" id="ampSimilarity">--%</span>
+              </div>
+              <div class="analysis-item">
+                <span class="analysis-label">Similitud General:</span>
+                <span class="analysis-value" id="generalSimilarity">--%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detección inteligente de IA vs Real -->
+        <div class="ai-detection-results" id="aiDetectionResults" style="display:none;">
+          <h4>🤖 Detección Inteligente IA vs Real</h4>
+          <div class="detection-grid">
+            <div class="detection-item" id="audio1Detection">
+              <div class="audio-label">Archivo 1 (Izquierda)</div>
+              <div class="detection-result" id="result1">Analizando...</div>
+              <div class="confidence-bar">
+                <div class="confidence-fill" id="confidence1"></div>
+              </div>
+              <div class="confidence-text" id="confidenceText1">0%</div>
+            </div>
+            <div class="detection-item" id="audio2Detection">
+              <div class="audio-label">Archivo 2 (Derecha)</div>
+              <div class="detection-result" id="result2">Analizando...</div>
+              <div class="confidence-bar">
+                <div class="confidence-fill" id="confidence2"></div>
+              </div>
+              <div class="confidence-text" id="confidenceText2">0%</div>
+            </div>
+          </div>
+          <div class="overall-comparison" id="overallComparison">
+            <h5>📊 Resultado General</h5>
+            <div class="comparison-result" id="finalResult">
+              Procesando análisis comparativo...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección de Acceso -->
+    <section id="auth" class="pantalla">
+      <div class="auth-container">
+        <div class="auth-header">
+          <h1 class="auth-title">VozCheck</h1>
+        </div>
+        <div class="auth-content">
+          <h2>Acceso a VozCheck</h2>
+          <form id="authForm" class="bloque">
+            <input type="email" id="authEmail" placeholder="Correo electrónico" required>
+            <input type="password" id="authPassword" placeholder="Contraseña" required>
+            <div class="botonera">
+              <button type="button" onclick="loginEmail()">Iniciar sesión</button>
+              <button type="button" onclick="registerEmail()">Registrarse</button>
+            </div>
+            <hr>
+            <p>o continúa con:</p>
+            <div class="social-login">
+              <button type="button" onclick="loginGoogle()">🔵 Google</button>
+              <button type="button" onclick="loginFacebook()">🔵 Facebook</button>
+            </div>
+          </form>
+          <p id="authStatus"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección de Perfil -->
+    <section id="perfil" class="pantalla oculto">
+      <div class="auth-container">
+        <div class="auth-header">
+          <h1 class="auth-title">Completar Perfil</h1>
+        </div>
+        <div class="auth-content">
+          <form id="perfilForm" class="bloque">
+            <div class="form-group">
+              <label for="nombreCompleto">Nombre Completo *</label>
+              <input type="text" id="nombreCompleto" placeholder="Ingresa tu nombre completo" required>
+            </div>
+            <div class="form-group">
+              <label for="correoUsuario">Correo Electrónico *</label>
+              <input type="email" id="correoUsuario" placeholder="tu@email.com" required readonly>
+            </div>
+            <div class="form-group">
+              <label for="telefono">Teléfono</label>
+              <input type="tel" id="telefono" placeholder="Número de teléfono">
+            </div>
+            <div class="form-group">
+              <label for="tipoUsuario">Tipo de Usuario *</label>
+              <select id="tipoUsuario" required>
+                <option value="">Selecciona una opción</option>
+                <option value="estudiante">Estudiante</option>
+                <option value="maestro">Maestro</option>
+                <option value="investigador">Investigador</option>
+                <option value="profesionista">Profesionista</option>
+                <option value="particular">Particular</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="preferenciaAnalisis">Preferencias de Análisis</label>
+              <select id="preferenciaAnalisis">
+                <option value="basico">Análisis Básico</option>
+                <option value="avanzado">Análisis Avanzado</option>
+                <option value="profesional">Análisis Profesional</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="notificaciones">Recibir Notificaciones</label>
+              <div class="checkbox-group">
+                <label><input type="checkbox" id="notifEmail" checked> Email</label>
+                <label><input type="checkbox" id="notifResultados"> Resultados de Análisis</label>
+                <label><input type="checkbox" id="notifActualizaciones"> Actualizaciones del Sistema</label>
+              </div>
+            </div>
+            <div class="botonera">
+              <button type="button" onclick="guardarPerfil()" id="btnGuardarPerfil">Completar Perfil</button>
+              <button type="button" onclick="editarPerfil()" id="btnEditarPerfil" style="display:none;">✏️ Editar Perfil</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección de Entrenamiento -->
+    <section id="entrenamientoMic" class="pantalla oculto">
+      <div class="container">
+        <h2>🧠 Entrenamiento del Modelo</h2>
+        <div class="analysis-description">
+          <p>Entrena el modelo de detección grabando muestras de voz real para mejorar la precisión del sistema.</p>
+        </div>
+
+        <div class="mode-selector">
+          <button id="btnModoGrabacion" onclick="mostrarModo('grabacion')" class="mode-active">
+            🎙️ Grabación de Voz para Entrenamiento
+          </button>
+        </div>
+
+        <div id="modoGrabacion" class="modo-entrenamiento">
+          <div class="training-suggestions">
+            <h4>💡 Pangramas Sugeridos para Entrenamiento</h4>
+            <div class="pangram-container">
+              <div class="pangram-item" data-pangram="Tengo un libro de papiroflexia sobre las hazañas y aventuras de Don Quijote de la Mancha en Kuwait">
+                "Tengo un libro de papiroflexia sobre las hazañas y aventuras de Don Quijote de la Mancha en Kuwait"
+              </div>
+              <div class="pangram-item" data-pangram="El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido joven">
+                "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido joven"
+              </div>
+              <div class="pangram-item" data-pangram="Jovencillo emponzoñado con whisky: ¡qué figurota exhibe!">
+                "Jovencillo emponzoñado con whisky: ¡qué figurota exhibe!"
+              </div>
+              <div class="pangram-item" data-pangram="Benjamin pidió una bebida de kiwi y fresa; Noé, sin vergüenza, la más exquisita champaña del menú">
+                "Benjamin pidió una bebida de kiwi y fresa; Noé, sin vergüenza, la más exquisita champaña del menú"
+              </div>
+            </div>
+            <div class="selected-pangram" id="selectedPangram">
+              <strong>Pangrama seleccionado:</strong> 
+              <span class="pangram-text" id="pangramText">Selecciona un pangrama de arriba</span>
+            </div>
+          </div>
+
+          <p id="estadoEntrenamiento">⏺ Esperando grabación...</p>
+          
+          <!-- Layout mejorado para entrenamiento -->
+          <div class="training-layout">
+            <!-- Timer y controles -->
+            <div class="training-controls">
+              <div class="linear-timer" id="linearTimer" style="display:none;">
+                <div class="timer-header">
+                  <span class="timer-icon">🎙️</span>
+                  <span class="timer-label">GRABANDO</span>
+                </div>
+                <div class="timer-display-linear">
+                  <span class="timer-value-linear" id="timerLinear">00:00</span>
+                </div>
+                <div class="timer-progress">
+                  <div class="progress-bar" id="progressBar"></div>
+                </div>
+              </div>
+
+              <div class="botonera bloque">
+                <button onclick="iniciarGrabacionEtiquetada('real')" class="record-btn">
+                  🎙️ Iniciar Grabación de Voz
+                </button>
+                <button onclick="detenerGrabacionEtiquetada()" class="stop-btn">
+                  🛑 Detener y Procesar
+                </button>
+              </div>
+            </div>
+
+            <!-- Pangrama visible durante grabación -->
+            <div class="recording-pangram-display" id="recordingPangramDisplay" style="display:none;">
+              <h4>📝 Lee el siguiente texto:</h4>
+              <div class="pangram-reading-box">
+                <p id="currentPangramText">Selecciona un pangrama para comenzar</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Visualización en tiempo real durante grabación -->
+          <div class="recording-visualization" id="recordingVisualization" style="display:none;">
+            <h4>📊 Visualización en Tiempo Real</h4>
+            <div class="canvas-wrapper">
+              <canvas id="recordingCanvas" width="600" height="150"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div id="modoArchivo" class="modo-entrenamiento oculto">
+          <div class="info-message">
+            <h4>📝 Modo de Grabación Únicamente</h4>
+            <p>Para un mejor entrenamiento del modelo, utiliza el modo de grabación que permite capturar audio en tiempo real con mayor precisión.</p>
+            <button onclick="mostrarModo('grabacion')" class="switch-mode-btn">
+              🎙️ Ir a Modo Grabación
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección de Configuración -->
+    <section id="configuracion" class="pantalla oculto">
+      <div class="container">
+        <h2>⚙️ Configuración</h2>
+        <div class="analysis-description">
+          <p>Personaliza la apariencia y configuración de VozCheck según tus preferencias.</p>
+        </div>
+
+        <div class="config-sections">
+          <!-- Configuración de Apariencia -->
+          <div class="config-section">
+            <h3>🎨 Apariencia</h3>
+            <div class="config-grid">
+              <div class="config-item">
+                <label for="themeSelector">Tema de la aplicación:</label>
+                <select id="themeSelector" onchange="changeTheme()">
+                  <option value="dark">🌙 Oscuro (Por defecto)</option>
+                  <option value="light">☀️ Claro</option>
+                </select>
+              </div>
+              <div class="config-item">
+                <label for="graphColorReal">Color para voz real:</label>
+                <input type="color" id="graphColorReal" value="#4A90E2" onchange="updateGraphColors()">
+              </div>
+              <div class="config-item">
+                <label for="graphColorIA">Color para voz IA:</label>
+                <input type="color" id="graphColorIA" value="#E74C3C" onchange="updateGraphColors()">
+              </div>
+              <div class="config-item">
+                <label for="graphColorGeneral">Color para análisis general:</label>
+                <input type="color" id="graphColorGeneral" value="#00FFE0" onchange="updateGraphColors()">
+              </div>
+            </div>
+          </div>
+
+          <!-- Configuración de Idioma -->
+          <div class="config-section">
+            <h3>🌍 Idioma</h3>
+            <div class="config-grid">
+              <div class="config-item">
+                <label for="languageSelector">Idioma de la aplicación:</label>
+                <select id="languageSelector" onchange="changeLanguage()">
+                  <option value="es">🇪🇸 Español</option>
+                  <option value="en">🇺🇸 English</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vista previa -->
+          <div class="config-section">
+            <h3>👁️ Vista Previa</h3>
+            <div class="preview-container">
+              <div class="preview-item">
+                <span class="preview-label">Voz Real:</span>
+                <div class="preview-bar real-preview" id="realPreview"></div>
+              </div>
+              <div class="preview-item">
+                <span class="preview-label">Voz IA:</span>
+                <div class="preview-bar ia-preview" id="iaPreview"></div>
+              </div>
+              <div class="preview-item">
+                <span class="preview-label">General:</span>
+                <div class="preview-bar general-preview" id="generalPreview"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Guardar configuración -->
+          <div class="config-actions">
+            <button onclick="saveConfiguration()">💾 Guardar Configuración</button>
+            <button onclick="resetConfiguration()">🔄 Restablecer por Defecto</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal para expandir canvas -->
+  <div id="canvasModal" class="modal" onclick="closeModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <canvas id="expandedCanvas"></canvas>
     </div>
+  </div>
 
-    <!-- Script principal -->
-    <script src="script.js"></script>
+  <footer>
+    <p>&copy; 2025 VozCheck. Desarrollado por Oz.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js" defer></script>
+  <script src="js/script.js" defer></script>
 </body>
 </html>
