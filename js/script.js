@@ -1,7 +1,7 @@
 // ===== CONFIGURACIÓN DE SUPABASE =====
 // IMPORTANTE: Reemplaza estos valores con los de tu proyecto Supabase
-const SUPABASE_URL = "TU_SUPABASE_URL_AQUI"
-const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY_AQUI"
+const SUPABASE_URL = "https://bmztpqepwcsbvejwtrdt.supabase.co"
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtenRwcWVwd2NzYnZland0cmR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5ODQ5MjIsImV4cCI6MjA2MTU2MDkyMn0.87KE6C6uRYIsJ68wj31JzNpvW1Td8psiyl2Gn_Pu0hs"
 
 // Inicializar cliente de Supabase
 let supabase = null
@@ -2070,4 +2070,67 @@ function setupPangramListeners() {
 }
 
 function setupMobileNavigation() {
-  const m
+  const mobileMenuBtn = document.getElementById("mobileMenuBtn")
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener("click", toggleMobileMenu)
+  }
+
+  // Cerrar menú móvil al hacer clic en un enlace
+  document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("nav-link")) {
+      const mobileNav = document.getElementById("mobileNav")
+      if (mobileNav) mobileNav.classList.remove("show")
+    }
+  })
+
+  // Cerrar menú de opciones al hacer clic fuera
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".options-menu")) {
+      const dropdown = document.getElementById("optionsDropdown")
+      if (dropdown) dropdown.classList.remove("show")
+    }
+  })
+}
+
+function setupValidation() {
+  const correoField = document.getElementById("correoUsuario")
+  const telefonoField = document.getElementById("telefono")
+  const authEmailField = document.getElementById("authEmail")
+
+  if (correoField) {
+    correoField.addEventListener("blur", function () {
+      if (this.value && !validateEmail(this.value)) {
+        showFieldError("correoUsuario", "Ingresa un correo electrónico válido")
+      } else if (this.value) {
+        showFieldSuccess("correoUsuario")
+      }
+    })
+  }
+
+  if (telefonoField) {
+    telefonoField.addEventListener("input", function () {
+      this.value = this.value.replace(/\D/g, "")
+      if (this.value.length > 10) {
+        this.value = this.value.slice(0, 10)
+      }
+    })
+
+    telefonoField.addEventListener("blur", function () {
+      if (this.value && !validatePhone(this.value)) {
+        showFieldError("telefono", "El teléfono debe tener exactamente 10 dígitos")
+      } else if (this.value) {
+        showFieldSuccess("telefono")
+      }
+    })
+  }
+
+  if (authEmailField) {
+    authEmailField.addEventListener("blur", function () {
+      if (this.value && !validateEmail(this.value)) {
+        showFieldError("authEmail", "Ingresa un correo electrónico válido")
+      } else if (this.value) {
+        showFieldSuccess("authEmail")
+      }
+    })
+  }
+}
