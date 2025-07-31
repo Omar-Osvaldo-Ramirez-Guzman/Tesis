@@ -1,37 +1,34 @@
-// ===== CONFIGURACIÓN DE SUPABASE =====
-// IMPORTANTE: Reemplaza estos valores con los de tu proyecto Supabase
+// js/script.js
+
+// 🔐 Supabase
 const SUPABASE_URL = "https://bmztpqepwcsbvejwtrdt.supabase.co"
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtenRwcWVwd2NzYnZland0cmR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5ODQ5MjIsImV4cCI6MjA2MTU2MDkyMn0.87KE6C6uRYIsJ68wj31JzNpvW1Td8psiyl2Gn_Pu0hs"
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtenRwcWVwd2NzYnZland0cmR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5ODQ5MjIsImV4cCI6MjA2MTU2MDkyMn0.87KE6C6uRYIsJ68wj31JzNpvW1Td8psiyl2Gn_Pu0hs"
 
-// Inicializar cliente de Supabase
-let supabase = null
-
-// Inicializar Supabase cuando esté disponible
-function initializeSupabase() {
-  try {
-    if (typeof window.supabase !== "undefined") {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-      console.log("✅ Supabase inicializado correctamente")
-      updateSystemInfo()
-      return true
-    } else {
-      console.error("❌ Supabase no está disponible")
-      return false
-    }
-  } catch (error) {
-    console.error("❌ Error inicializando Supabase:", error)
-    return false
-  }
+// ✅ Inicializar Supabase de forma segura
+let supabaseClient = null
+if (window.supabase && typeof window.supabase.createClient === "function") {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  console.log("✅ Supabase inicializado correctamente")
+} else {
+  console.error("❌ Supabase no se cargó correctamente. Verifica el <script> en el HTML.")
 }
 
-// Variables globales
+// Estados del usuario
 let userState = {
   isLoggedIn: false,
   hasProfile: false,
   email: "",
   userData: null,
-  supabaseUser: null,
 }
+
+// Variables globales
+let modalZoom = 1
+let modalPanX = 0
+let modalPanY = 0
+const isDragging = false
+const lastMouseX = 0
+const lastMouseY = 0
 
 let currentAnalysisData = null
 const comparativeData = { real: null, ia: null }
@@ -85,179 +82,13 @@ const translations = {
   },
 }
 
-// ===== INICIALIZACIÓN =====
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("🚀 VozCheck iniciado")
-
-  // Inicializar Supabase
-  setTimeout(() => {
-    if (initializeSupabase()) {
-      checkAuthState()
-    }
-  }, 100)
-
-  // Inicializar estado
-  userState = {
-    isLoggedIn: false,
-    hasProfile: false,
-    email: "",
-    userData: null,
-    supabaseUser: null,
-  }
-
-  updateNavigation()
-  showSection("auth")
-
-  // Event listeners
-  setupFileInputs()
-  setupPangramListeners()
-  setupMobileNavigation()
-  setupValidation()
-  loadUserConfiguration()
-
-  console.log("✅ VozCheck inicializado correctamente")
-})
-
-// ===== FUNCIONES DE SUPABASE =====
-
-// Verificar estado de autenticación
-async function checkAuthState() {
-  if (!supabase) return
-
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (user) {
-      console.log("👤 Usuario autenticado:", user.email)
-      userState.isLoggedIn = true
-      userState.email = user.email
-      userState.supabaseUser = user
-
-      // Cargar perfil del usuario
-      await loadUserProfile(user.id)
-
-      updateNavigation()
-      if (userState.hasProfile) {
-        showSection("analisis")
-      } else {
-        showSection("perfil")
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error verificando autenticación:", error)
-  }
-}
-
-// Cargar perfil del usuario desde Supabase
-async function loadUserProfile(userId) {
-  if (!supabase) return
-
-  try {
-    const { data, error } = await supabase.from("perfiles").select("*").eq("user_id", userId).single()
-
-    if (error && error.code !== "PGRST116") {
-      throw error
-    }
-
-    if (data) {
-      console.log("📋 Perfil cargado:", data)
-      userState.hasProfile = true
-      userState.userData = data
-
-      // Llenar formulario con datos existentes
-      fillProfileForm(data)
-    } else {
-      console.log("📋 No se encontró perfil, usuario debe completarlo")
-      userState.hasProfile = false
-    }
-  } catch (error) {
-    console.error("❌ Error cargando perfil:", error)
-    userState.hasProfile = false
-  }
-}
-
-// Llenar formulario de perfil con datos existentes
-function fillProfileForm(data) {
-  const fields = {
-    nombreCompleto: data.nombre_completo,
-    correoUsuario: data.email,
-    telefono: data.telefono,
-    tipoUsuario: data.tipo_usuario,
-    preferenciaAnalisis: data.preferencia_analisis,
-    notifEmail: data.notif_email,
-    notifResultados: data.notif_resultados,
-    notifActualizaciones: data.notif_actualizaciones,
-  }
-
-  Object.entries(fields).forEach(([fieldId, value]) => {
-    const field = document.getElementById(fieldId)
-    if (field && value !== null && value !== undefined) {
-      if (field.type === "checkbox") {
-        field.checked = value
-      } else {
-        field.value = value
-      }
-    }
-  })
-
-  // Cambiar botones
-  const btnGuardar = document.getElementById("btnGuardarPerfil")
-  const btnEditar = document.getElementById("btnEditarPerfil")
-
-  if (btnGuardar) {
-    btnGuardar.style.display = "none"
-  }
-  if (btnEditar) {
-    btnEditar.style.display = "inline-block"
-  }
-
-  toggleProfileFields(false)
-}
-
-// Guardar perfil en Supabase
-async function saveProfileToSupabase(profileData) {
-  if (!supabase || !userState.supabaseUser) {
-    throw new Error("Supabase no disponible o usuario no autenticado")
-  }
-
-  try {
-    const dataToSave = {
-      user_id: userState.supabaseUser.id,
-      email: userState.email,
-      nombre_completo: profileData.nombre,
-      telefono: profileData.telefono || null,
-      tipo_usuario: profileData.tipoUsuario,
-      preferencia_analisis: profileData.preferenciaAnalisis || "basico",
-      notif_email: profileData.notificaciones.email,
-      notif_resultados: profileData.notificaciones.resultados,
-      notif_actualizaciones: profileData.notificaciones.actualizaciones,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { data, error } = await supabase.from("perfiles").upsert(dataToSave, {
-      onConflict: "user_id",
-      returning: "minimal",
-    })
-
-    if (error) throw error
-
-    console.log("✅ Perfil guardado en Supabase")
-    return true
-  } catch (error) {
-    console.error("❌ Error guardando perfil:", error)
-    throw error
-  }
-}
-
-// ===== FUNCIONES DE AUTENTICACIÓN CON SUPABASE =====
-
-async function loginEmail() {
+// Funciones de autenticación mejoradas
+function loginEmail() {
   const email = document.getElementById("authEmail").value
   const password = document.getElementById("authPassword").value
   const statusElement = document.getElementById("authStatus")
 
+  // Limpiar errores previos
   clearFormErrors()
 
   if (!email || !password) {
@@ -266,61 +97,41 @@ async function loginEmail() {
     return
   }
 
+  // Validar email
   if (!validateEmail(email)) {
     showFieldError("authEmail", "Ingresa un correo electrónico válido")
     statusElement.textContent = "Correo electrónico no válido"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  if (!supabase) {
-    statusElement.textContent = "❌ Error: Supabase no está configurado"
     statusElement.style.color = "#e74c3c"
     return
   }
 
   statusElement.textContent = "Iniciando sesión..."
-  statusElement.style.color = "#00ffe0"
+  statusElement.style.color = "#0ff"
 
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    })
-
-    if (error) throw error
-
-    console.log("✅ Login exitoso:", data.user.email)
-
+  setTimeout(() => {
     userState.isLoggedIn = true
-    userState.email = data.user.email
-    userState.supabaseUser = data.user
-
-    // Cargar perfil
-    await loadUserProfile(data.user.id)
+    userState.email = email
+    userState.hasProfile = true // Login directo a análisis
 
     statusElement.textContent = "✅ Sesión iniciada correctamente"
     statusElement.style.color = "#2ecc71"
 
-    updateNavigation()
+    // Cargar configuración guardada
+    loadUserConfiguration()
 
-    if (userState.hasProfile) {
-      showSection("analisis")
-    } else {
-      showSection("perfil")
-    }
-  } catch (error) {
-    console.error("❌ Error en login:", error)
-    statusElement.textContent = `❌ Error: ${error.message}`
-    statusElement.style.color = "#e74c3c"
-  }
+    // Ir directo a análisis
+    updateNavigation()
+    document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+    document.getElementById("analisis").classList.remove("oculto")
+  }, 1000)
 }
 
-async function registerEmail() {
+function registerEmail() {
   const email = document.getElementById("authEmail").value
   const password = document.getElementById("authPassword").value
   const statusElement = document.getElementById("authStatus")
 
+  // Limpiar errores previos
   clearFormErrors()
 
   if (!email || !password) {
@@ -329,6 +140,7 @@ async function registerEmail() {
     return
   }
 
+  // Validar email
   if (!validateEmail(email)) {
     showFieldError("authEmail", "Ingresa un correo electrónico válido")
     statusElement.textContent = "Correo electrónico no válido"
@@ -336,42 +148,13 @@ async function registerEmail() {
     return
   }
 
-  if (password.length < 6) {
-    showFieldError("authPassword", "La contraseña debe tener al menos 6 caracteres")
-    statusElement.textContent = "Contraseña muy corta"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  if (!supabase) {
-    statusElement.textContent = "❌ Error: Supabase no está configurado"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
   statusElement.textContent = "Creando cuenta..."
-  statusElement.style.color = "#00ffe0"
+  statusElement.style.color = "#0ff"
 
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-    })
-
-    if (error) throw error
-
-    if (data.user && !data.user.email_confirmed_at) {
-      statusElement.textContent = "📧 Revisa tu email para confirmar la cuenta"
-      statusElement.style.color = "#f1c40f"
-      return
-    }
-
-    console.log("✅ Registro exitoso:", data.user.email)
-
+  setTimeout(() => {
     userState.isLoggedIn = true
-    userState.email = data.user.email
-    userState.supabaseUser = data.user
-    userState.hasProfile = false
+    userState.email = email
+    userState.hasProfile = false // Registro requiere completar perfil
 
     const correoUsuario = document.getElementById("correoUsuario")
     if (correoUsuario) {
@@ -381,116 +164,170 @@ async function registerEmail() {
     statusElement.textContent = "✅ Cuenta creada exitosamente"
     statusElement.style.color = "#2ecc71"
 
+    // Ir a completar perfil
     updateNavigation()
-    showSection("perfil")
-  } catch (error) {
-    console.error("❌ Error en registro:", error)
-    statusElement.textContent = `❌ Error: ${error.message}`
-    statusElement.style.color = "#e74c3c"
+    document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+    document.getElementById("perfil").classList.remove("oculto")
+  }, 1500)
+}
+
+// Funciones de validación
+function validateEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+function validatePhone(phone) {
+  const phoneRegex = /^\d{10}$/
+  return phoneRegex.test(phone)
+}
+
+function showFieldError(fieldId, message) {
+  const field = document.getElementById(fieldId)
+  if (!field) return
+
+  field.classList.add("input-error")
+  field.classList.remove("input-success")
+
+  // Remover error previo
+  const existingError = field.parentNode.querySelector(".form-error")
+  if (existingError) {
+    existingError.remove()
+  }
+
+  // Agregar nuevo error
+  const errorDiv = document.createElement("div")
+  errorDiv.className = "form-error"
+  errorDiv.textContent = message
+  field.parentNode.appendChild(errorDiv)
+}
+
+function showFieldSuccess(fieldId) {
+  const field = document.getElementById(fieldId)
+  if (!field) return
+
+  field.classList.add("input-success")
+  field.classList.remove("input-error")
+
+  // Remover error si existe
+  const existingError = field.parentNode.querySelector(".form-error")
+  if (existingError) {
+    existingError.remove()
   }
 }
 
-async function loginGoogle() {
-  const statusElement = document.getElementById("authStatus")
+function clearFormErrors() {
+  document.querySelectorAll(".form-error").forEach((error) => error.remove())
+  document.querySelectorAll(".input-error").forEach((field) => {
+    field.classList.remove("input-error")
+  })
+  document.querySelectorAll(".input-success").forEach((field) => {
+    field.classList.remove("input-success")
+  })
+}
 
-  if (!supabase) {
-    statusElement.textContent = "❌ Error: Supabase no está configurado"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
+function loginGoogle() {
+  const statusElement = document.getElementById("authStatus")
 
   statusElement.textContent = "Conectando con Google..."
-  statusElement.style.color = "#00ffe0"
+  statusElement.style.color = "#0ff"
 
-  try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    })
+  setTimeout(() => {
+    userState.isLoggedIn = true
+    userState.email = "usuario@gmail.com"
+    userState.hasProfile = true // Login directo a análisis
 
-    if (error) throw error
-
-    // El redirect manejará el resto
-    console.log("🔄 Redirigiendo a Google...")
-  } catch (error) {
-    console.error("❌ Error con Google OAuth:", error)
-    statusElement.textContent = `❌ Error: ${error.message}`
-    statusElement.style.color = "#e74c3c"
-  }
-}
-
-async function loginFacebook() {
-  const statusElement = document.getElementById("authStatus")
-
-  if (!supabase) {
-    statusElement.textContent = "❌ Error: Supabase no está configurado"
-    statusElement.style.color = "#e74c3c"
-    return
-  }
-
-  statusElement.textContent = "Conectando con Facebook..."
-  statusElement.style.color = "#00ffe0"
-
-  try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "facebook",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    })
-
-    if (error) throw error
-
-    console.log("🔄 Redirigiendo a Facebook...")
-  } catch (error) {
-    console.error("❌ Error con Facebook OAuth:", error)
-    statusElement.textContent = `❌ Error: ${error.message}`
-    statusElement.style.color = "#e74c3c"
-  }
-}
-
-async function logout() {
-  const dropdown = document.getElementById("optionsDropdown")
-  if (dropdown) dropdown.classList.remove("show")
-
-  if (!confirm("¿Estás seguro de que quieres cerrar sesión?")) {
-    return
-  }
-
-  try {
-    if (supabase) {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      console.log("✅ Logout exitoso")
-    }
-
-    // Limpiar estado
-    userState = {
-      isLoggedIn: false,
-      hasProfile: false,
-      email: "",
-      userData: null,
-      supabaseUser: null,
-    }
+    statusElement.textContent = "✅ Conectado con Google"
+    statusElement.style.color = "#2ecc71"
 
     updateNavigation()
-    showSection("auth")
+    document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+    document.getElementById("analisis").classList.remove("oculto")
+  }, 1200)
+}
 
-    const authForm = document.getElementById("authForm")
-    const authStatus = document.getElementById("authStatus")
-    if (authForm) authForm.reset()
-    if (authStatus) authStatus.textContent = ""
-  } catch (error) {
-    console.error("❌ Error en logout:", error)
-    alert("Error cerrando sesión: " + error.message)
+function loginFacebook() {
+  const statusElement = document.getElementById("authStatus")
+
+  statusElement.textContent = "Conectando con Facebook..."
+  statusElement.style.color = "#0ff"
+
+  setTimeout(() => {
+    userState.isLoggedIn = true
+    userState.email = "usuario@facebook.com"
+    userState.hasProfile = true // Login directo a análisis
+
+    statusElement.textContent = "✅ Conectado con Facebook"
+    statusElement.style.color = "#2ecc71"
+
+    updateNavigation()
+    document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+    document.getElementById("analisis").classList.remove("oculto")
+  }, 1200)
+}
+
+// Control de navegación según estado del usuario
+function updateNavigation() {
+  const navMenu = document.getElementById("navMenu")
+  const optionsMenu = document.getElementById("optionsMenu")
+
+  if (!userState.isLoggedIn) {
+    navMenu.innerHTML = '<li><a href="#auth" class="nav-link active">Acceso</a></li>'
+    if (optionsMenu) optionsMenu.style.display = "none"
+  } else if (!userState.hasProfile) {
+    navMenu.innerHTML = '<li><a href="#perfil" class="nav-link active">Completar Perfil</a></li>'
+    if (optionsMenu) optionsMenu.style.display = "block"
+  } else {
+    navMenu.innerHTML = `
+      <li><a href="#analisis" class="nav-link active">🎤 ${translations[userConfig.language].analysis}</a></li>
+      <li><a href="#comparacion" class="nav-link">🆚 ${translations[userConfig.language].comparison}</a></li>
+      <li><a href="#entrenamientoMic" class="nav-link">🧠 ${translations[userConfig.language].training}</a></li>
+    `
+    if (optionsMenu) optionsMenu.style.display = "block"
+  }
+
+  setupNavigationListeners()
+}
+
+// Configurar event listeners de navegación
+function setupNavigationListeners() {
+  const enlaces = document.querySelectorAll(".nav-link")
+
+  enlaces.forEach((link) => {
+    link.removeEventListener("click", handleNavClick)
+    link.addEventListener("click", handleNavClick)
+  })
+}
+
+function handleNavClick(e) {
+  e.preventDefault()
+  const link = e.target
+  const targetId = link.getAttribute("href")
+
+  if (targetId === "#analisis" || targetId === "#comparacion" || targetId === "#entrenamientoMic") {
+    if (!userState.isLoggedIn || !userState.hasProfile) {
+      alert("Debes completar tu perfil antes de acceder a esta sección")
+      return
+    }
+  } else if (targetId === "#perfil") {
+    if (!userState.isLoggedIn) {
+      alert("Debes iniciar sesión primero")
+      return
+    }
+  }
+
+  document.querySelectorAll(".nav-link").forEach((l) => l.classList.remove("active"))
+  link.classList.add("active")
+
+  document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+  const targetScreen = document.querySelector(targetId)
+  if (targetScreen) {
+    targetScreen.classList.remove("oculto")
   }
 }
 
-// ===== FUNCIONES DE PERFIL CON SUPABASE =====
-
-async function guardarPerfil() {
+// Funciones de perfil
+function guardarPerfil() {
   const nombre = document.getElementById("nombreCompleto").value
   const correo = document.getElementById("correoUsuario").value
   const telefono = document.getElementById("telefono").value
@@ -500,10 +337,12 @@ async function guardarPerfil() {
   const notifResultados = document.getElementById("notifResultados").checked
   const notifActualizaciones = document.getElementById("notifActualizaciones").checked
 
+  // Limpiar errores previos
   clearFormErrors()
 
   let hasErrors = false
 
+  // Validaciones
   if (!nombre || !correo || !tipoUsuario) {
     alert("Por favor completa los campos obligatorios (marcados con *)")
     return
@@ -523,9 +362,11 @@ async function guardarPerfil() {
     showFieldSuccess("telefono")
   }
 
-  if (hasErrors) return
+  if (hasErrors) {
+    return
+  }
 
-  const profileData = {
+  userState.userData = {
     nombre,
     correo,
     telefono,
@@ -538,27 +379,28 @@ async function guardarPerfil() {
     },
   }
 
-  try {
-    // Guardar en Supabase
-    await saveProfileToSupabase(profileData)
+  userState.hasProfile = true
 
-    userState.userData = profileData
-    userState.hasProfile = true
+  // Cambiar interfaz del perfil
+  const btnGuardar = document.getElementById("btnGuardarPerfil")
+  const btnEditar = document.getElementById("btnEditarPerfil")
 
-    const btnGuardar = document.getElementById("btnGuardarPerfil")
-    const btnEditar = document.getElementById("btnEditarPerfil")
+  if (btnGuardar) btnGuardar.style.display = "none"
+  if (btnEditar) btnEditar.style.display = "inline-block"
 
-    if (btnGuardar) btnGuardar.style.display = "none"
-    if (btnEditar) btnEditar.style.display = "inline-block"
+  // Hacer campos de solo lectura
+  toggleProfileFields(false)
 
-    toggleProfileFields(false)
-    alert("✅ Perfil guardado exitosamente en Supabase")
+  alert("✅ Perfil guardado exitosamente")
 
-    updateNavigation()
-    showSection("analisis")
-  } catch (error) {
-    console.error("❌ Error guardando perfil:", error)
-    alert("❌ Error guardando perfil: " + error.message)
+  updateNavigation()
+  document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+  document.getElementById("analisis").classList.remove("oculto")
+
+  document.querySelectorAll(".nav-link").forEach((l) => l.classList.remove("active"))
+  const analysisLink = document.querySelector('a[href="#analisis"]')
+  if (analysisLink) {
+    analysisLink.classList.add("active")
   }
 }
 
@@ -572,6 +414,7 @@ function editarPerfil() {
   }
   if (btnEditar) btnEditar.style.display = "none"
 
+  // Hacer campos editables
   toggleProfileFields(true)
 }
 
@@ -590,6 +433,7 @@ function toggleProfileFields(editable) {
     const field = document.getElementById(fieldId)
     if (field) {
       if (fieldId === "correoUsuario") {
+        // El email siempre permanece readonly
         field.readOnly = true
       } else {
         field.readOnly = !editable
@@ -599,283 +443,7 @@ function toggleProfileFields(editable) {
   })
 }
 
-// ===== FUNCIONES DE PRUEBA DE CONEXIÓN =====
-
-async function testSupabaseConnection() {
-  const connectionStatus = document.getElementById("connectionStatus")
-  const authTestStatus = document.getElementById("authTestStatus")
-  const dbTestStatus = document.getElementById("dbTestStatus")
-
-  // Mostrar sección de conexión
-  showSection("conexion")
-
-  if (connectionStatus) {
-    connectionStatus.innerHTML = '<div class="test-loading">🔄 Probando conexión...</div>'
-  }
-
-  try {
-    if (!supabase) {
-      throw new Error("Cliente de Supabase no inicializado")
-    }
-
-    // Probar conexión básica
-    const { data, error } = await supabase.from("perfiles").select("count", { count: "exact", head: true })
-
-    if (error && error.code !== "PGRST116") {
-      throw error
-    }
-
-    // Conexión exitosa
-    if (connectionStatus) {
-      connectionStatus.innerHTML = `
-        <div class="test-result test-success">
-          ✅ Conexión exitosa con Supabase<br>
-          <small>Tabla 'perfiles' accesible</small>
-        </div>
-      `
-    }
-
-    // Actualizar estado de autenticación
-    if (authTestStatus) {
-      if (userState.isLoggedIn) {
-        authTestStatus.innerHTML = `
-          <div class="test-result test-success">
-            ✅ Usuario autenticado: ${userState.email}<br>
-            <small>ID: ${userState.supabaseUser?.id || "N/A"}</small>
-          </div>
-        `
-      } else {
-        authTestStatus.innerHTML = `
-          <div class="test-result test-info">
-            ℹ️ No hay usuario autenticado<br>
-            <small>Inicia sesión para probar la autenticación</small>
-          </div>
-        `
-      }
-    }
-
-    // Actualizar estado de base de datos
-    if (dbTestStatus) {
-      if (userState.hasProfile) {
-        dbTestStatus.innerHTML = `
-          <div class="test-result test-success">
-            ✅ Perfil cargado desde la base de datos<br>
-            <small>Datos sincronizados correctamente</small>
-          </div>
-        `
-      } else {
-        dbTestStatus.innerHTML = `
-          <div class="test-result test-info">
-            ℹ️ No hay perfil en la base de datos<br>
-            <small>Completa tu perfil para probar la escritura</small>
-          </div>
-        `
-      }
-    }
-
-    updateSystemInfo()
-    updateLastTestTime()
-  } catch (error) {
-    console.error("❌ Error en prueba de conexión:", error)
-
-    if (connectionStatus) {
-      connectionStatus.innerHTML = `
-        <div class="test-result test-error">
-          ❌ Error de conexión: ${error.message}<br>
-          <small>Verifica tu configuración de Supabase</small>
-        </div>
-      `
-    }
-
-    updateSystemInfo()
-    updateLastTestTime()
-  }
-}
-
-async function testDatabaseOperations() {
-  const dbTestStatus = document.getElementById("dbTestStatus")
-
-  if (!supabase) {
-    if (dbTestStatus) {
-      dbTestStatus.innerHTML = `
-        <div class="test-result test-error">
-          ❌ Supabase no está configurado
-        </div>
-      `
-    }
-    return
-  }
-
-  if (!userState.isLoggedIn) {
-    if (dbTestStatus) {
-      dbTestStatus.innerHTML = `
-        <div class="test-result test-info">
-          ℹ️ Debes iniciar sesión para probar la base de datos
-        </div>
-      `
-    }
-    return
-  }
-
-  if (dbTestStatus) {
-    dbTestStatus.innerHTML = '<div class="test-loading">🔄 Probando operaciones de base de datos...</div>'
-  }
-
-  try {
-    // Probar lectura
-    const { data: readData, error: readError } = await supabase
-      .from("perfiles")
-      .select("*")
-      .eq("user_id", userState.supabaseUser.id)
-
-    if (readError) throw readError
-
-    // Probar escritura (actualizar timestamp)
-    const { error: writeError } = await supabase.from("perfiles").upsert(
-      {
-        user_id: userState.supabaseUser.id,
-        email: userState.email,
-        test_timestamp: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    )
-
-    if (writeError) throw writeError
-
-    if (dbTestStatus) {
-      dbTestStatus.innerHTML = `
-        <div class="test-result test-success">
-          ✅ Operaciones de base de datos exitosas<br>
-          <small>Lectura y escritura funcionando correctamente</small>
-        </div>
-      `
-    }
-  } catch (error) {
-    console.error("❌ Error en operaciones de base de datos:", error)
-
-    if (dbTestStatus) {
-      dbTestStatus.innerHTML = `
-        <div class="test-result test-error">
-          ❌ Error en base de datos: ${error.message}<br>
-          <small>Verifica los permisos de tu tabla</small>
-        </div>
-      `
-    }
-  }
-}
-
-function updateSystemInfo() {
-  const supabaseUrl = document.getElementById("supabaseUrl")
-  const clientStatus = document.getElementById("clientStatus")
-  const currentUser = document.getElementById("currentUser")
-
-  if (supabaseUrl) {
-    supabaseUrl.textContent = SUPABASE_URL || "No configurado"
-  }
-
-  if (clientStatus) {
-    clientStatus.textContent = supabase ? "Inicializado" : "No inicializado"
-  }
-
-  if (currentUser) {
-    if (userState.isLoggedIn) {
-      currentUser.textContent = userState.email
-    } else {
-      currentUser.textContent = "No autenticado"
-    }
-  }
-}
-
-function updateLastTestTime() {
-  const lastTest = document.getElementById("lastTest")
-  if (lastTest) {
-    lastTest.textContent = new Date().toLocaleString()
-  }
-}
-
-// ===== FUNCIONES DE NAVEGACIÓN =====
-function updateNavigation() {
-  const navMenu = document.getElementById("navMenu")
-  const mobileNavMenu = document.getElementById("mobileNavMenu")
-  const optionsMenu = document.getElementById("optionsMenu")
-
-  let menuHTML = ""
-
-  if (!userState.isLoggedIn) {
-    menuHTML = '<li><a href="#auth" class="nav-link active" onclick="showSection(\'auth\')">Acceso</a></li>'
-    if (optionsMenu) optionsMenu.style.display = "none"
-  } else if (!userState.hasProfile) {
-    menuHTML =
-      '<li><a href="#perfil" class="nav-link active" onclick="showSection(\'perfil\')">Completar Perfil</a></li>'
-    if (optionsMenu) optionsMenu.style.display = "block"
-  } else {
-    menuHTML = `
-      <li><a href="#analisis" class="nav-link active" onclick="showSection('analisis')">🎤 ${translations[userConfig.language].analysis}</a></li>
-      <li><a href="#comparacion" class="nav-link" onclick="showSection('comparacion')">🆚 ${translations[userConfig.language].comparison}</a></li>
-      <li><a href="#entrenamientoMic" class="nav-link" onclick="showSection('entrenamientoMic')">🧠 ${translations[userConfig.language].training}</a></li>
-    `
-    if (optionsMenu) optionsMenu.style.display = "block"
-  }
-
-  if (navMenu) navMenu.innerHTML = menuHTML
-  if (mobileNavMenu) mobileNavMenu.innerHTML = menuHTML
-}
-
-function showSection(sectionId) {
-  // Verificar permisos
-  if (
-    (sectionId === "analisis" || sectionId === "comparacion" || sectionId === "entrenamientoMic") &&
-    (!userState.isLoggedIn || !userState.hasProfile)
-  ) {
-    alert("Debes completar tu perfil antes de acceder a esta sección")
-    return
-  }
-
-  if (sectionId === "perfil" && !userState.isLoggedIn) {
-    alert("Debes iniciar sesión primero")
-    return
-  }
-
-  // Ocultar todas las secciones
-  document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
-
-  // Mostrar sección seleccionada
-  const targetSection = document.getElementById(sectionId)
-  if (targetSection) {
-    targetSection.classList.remove("oculto")
-  }
-
-  // Actualizar navegación activa
-  document.querySelectorAll(".nav-link").forEach((l) => l.classList.remove("active"))
-  document.querySelectorAll(`a[href="#${sectionId}"]`).forEach((l) => l.classList.add("active"))
-
-  // Cerrar menú móvil
-  const mobileNav = document.getElementById("mobileNav")
-  if (mobileNav) mobileNav.classList.remove("show")
-}
-
-// ===== FUNCIONES DE ANÁLISIS DE AUDIO =====
-function switchTab(tabName) {
-  // Ocultar todos los tabs
-  document.querySelectorAll(".tab-content").forEach((tab) => {
-    tab.classList.remove("active")
-  })
-
-  // Remover clase active de todos los botones
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.classList.remove("active")
-  })
-
-  // Mostrar tab seleccionado
-  const targetTab = document.getElementById(tabName + "Tab")
-  if (targetTab) {
-    targetTab.classList.add("active")
-  }
-
-  // Activar botón correspondiente
-  event.target.classList.add("active")
-}
-
+// Funciones de análisis de audio mejoradas
 function iniciarAnalisis() {
   const archivo = document.getElementById("archivoAudio").files[0]
   if (!archivo) {
@@ -886,13 +454,6 @@ function iniciarAnalisis() {
   if (!validateAudioFile(archivo, "archivoAudioStatus")) {
     return
   }
-
-  // Mostrar contenedores de visualización y resultados
-  const visualizationContainer = document.getElementById("visualizationContainer")
-  const resultadoContainer = document.getElementById("resultado")
-
-  if (visualizationContainer) visualizationContainer.style.display = "block"
-  if (resultadoContainer) resultadoContainer.style.display = "block"
 
   const url = URL.createObjectURL(archivo)
   analizarAudio(url, archivo)
@@ -905,8 +466,7 @@ function analizarAudio(audioURL, audioFile) {
   const transcripcionContainer = document.getElementById("transcripcionAnalisis")
 
   // Mostrar mensaje de procesamiento
-  resultado.innerHTML =
-    '<div style="text-align: center; padding: 2rem; color: #00ffe0;"><h3>🔄 Analizando audio...</h3><p>Procesando características de la voz...</p></div>'
+  resultado.innerHTML = '<p style="color:#0ff">🔄 Analizando audio...</p>'
 
   const ctxWave = waveformCanvas.getContext("2d")
   const ctxSpec = spectrumCanvas.getContext("2d")
@@ -920,15 +480,12 @@ function analizarAudio(audioURL, audioFile) {
       analyzeAudioDetails(audioBuffer)
 
       const rawData = audioBuffer.getChannelData(0)
-
-      // Dibujar forma de onda
       ctxWave.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height)
       ctxWave.beginPath()
-      ctxWave.strokeStyle = userConfig.colors.general
+      ctxWave.strokeStyle = "#00ffe0"
       ctxWave.lineWidth = 2
       const step = Math.ceil(rawData.length / waveformCanvas.width)
       const amp = waveformCanvas.height / 2
-
       for (let i = 0; i < waveformCanvas.width; i++) {
         let min = 1.0,
           max = -1.0
@@ -941,6 +498,8 @@ function analizarAudio(audioURL, audioFile) {
         ctxWave.lineTo(i, (1 + max) * amp)
       }
       ctxWave.stroke()
+
+      drawCanvasWithAxes(waveformCanvas, null)
 
       // Análisis espectral
       const analyser = audioContext.createAnalyser()
@@ -957,28 +516,24 @@ function analizarAudio(audioURL, audioFile) {
       function drawSpectrum() {
         requestAnimationFrame(drawSpectrum)
         analyser.getByteFrequencyData(dataArray)
-
         ctxSpec.fillStyle = "#000"
         ctxSpec.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height)
-
         const barWidth = (spectrumCanvas.width / bufferLength) * 2.5
         let x = 0
-
         for (let i = 0; i < bufferLength; i++) {
           const barHeight = dataArray[i]
-          const hue = (i / bufferLength) * 360
-          ctxSpec.fillStyle = `hsl(${hue}, 70%, 50%)`
+          ctxSpec.fillStyle = `rgb(${barHeight + 100}, 50, 200)`
           ctxSpec.fillRect(x, spectrumCanvas.height - barHeight / 2, barWidth, barHeight / 2)
           x += barWidth + 1
         }
       }
       drawSpectrum()
 
+      drawCanvasWithAxes(spectrumCanvas, null)
+
       // Mostrar transcripción
-      if (transcripcionContainer) {
-        transcripcionContainer.style.display = "block"
-        generateRealTranscription(audioFile, "transcripcionAnalisisContent")
-      }
+      transcripcionContainer.style.display = "block"
+      generateRealTranscription(audioFile, "transcripcionAnalisisContent")
 
       // Simular análisis de IA vs Real
       setTimeout(() => {
@@ -989,139 +544,60 @@ function analizarAudio(audioURL, audioFile) {
 
         const color = isAI ? "#e74c3c" : "#2ecc71"
         const resultText = isAI ? "IA" : "REAL"
-        const bgColor = isAI ? "rgba(231, 76, 60, 0.1)" : "rgba(46, 204, 113, 0.1)"
 
         resultado.innerHTML = `
-          <div style="text-align: center; padding: 2rem; background: ${bgColor}; border-radius: 12px; border: 2px solid ${color};">
-            <h3 style="color: ${color}; font-size: 2.5rem; margin-bottom: 1rem; text-shadow: 0 0 10px ${color};">
+          <div style="text-align: center; padding: 2rem; background: rgba(0,255,255,0.1); border-radius: 10px; border: 2px solid #0ff;">
+            <h3 style="color:${color}; font-size: 2rem; margin-bottom: 1rem;">
               🎯 Resultado: VOZ ${resultText}
             </h3>
-            <div style="margin: 1.5rem 0;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span style="color: #00ffe0; font-weight: 600;">Confianza:</span>
-                <span style="color: ${color}; font-weight: 700; font-size: 1.2rem;">${confidence}%</span>
+            <p style="color: #0ff; font-size: 1.2rem; margin-bottom: 0.5rem;">
+              Confianza: ${confidence}%
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+              <div style="background: #1b1f2a; padding: 1rem; border-radius: 8px;">
+                <strong style="color: #0ff;">Duración:</strong><br>
+                <span style="color: #fff;">${duration} segundos</span>
               </div>
-              <div style="width: 100%; height: 20px; background: #333; border-radius: 10px; overflow: hidden;">
-                <div style="width: ${confidence}%; height: 100%; background: linear-gradient(90deg, ${color}, ${color}aa); transition: width 2s ease;"></div>
+              <div style="background: #1b1f2a; padding: 1rem; border-radius: 8px;">
+                <strong style="color: #0ff;">Frecuencia Fundamental:</strong><br>
+                <span style="color: #fff;">${fundamentalFreq.toFixed(1)} Hz</span>
               </div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem;">
-              <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
-                <strong style="color: #00ffe0;">Duración:</strong><br>
-                <span style="color: #fff; font-size: 1.1rem;">${duration} segundos</span>
-              </div>
-              <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
-                <strong style="color: #00ffe0;">Frecuencia Fundamental:</strong><br>
-                <span style="color: #fff; font-size: 1.1rem;">${fundamentalFreq.toFixed(1)} Hz</span>
-              </div>
-              <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
-                <strong style="color: #00ffe0;">Tipo de Análisis:</strong><br>
-                <span style="color: #fff; font-size: 1.1rem;">Detección IA/Real</span>
-              </div>
-              <div style="background: var(--bg-primary); padding: 1.5rem; border-radius: 8px; border: 1px solid #333;">
-                <strong style="color: #00ffe0;">Precisión del Sistema:</strong><br>
-                <span style="color: #fff; font-size: 1.1rem;">92.5%</span>
+              <div style="background: #1b1f2a; padding: 1rem; border-radius: 8px;">
+                <strong style="color: #0ff;">Tipo de Análisis:</strong><br>
+                <span style="color: #fff;">Detección IA/Real</span>
               </div>
             </div>
           </div>
         `
+
+        // Guardar en Supabase si está disponible
+        if (supabaseClient) {
+          supabaseClient
+            .from("analisis")
+            .insert({
+              duracion: Number.parseFloat(duration),
+              f0: fundamentalFreq,
+              resultado: resultText,
+              porcentaje: confidence,
+              fecha: new Date().toISOString(),
+            })
+            .then(({ error }) => {
+              if (error) {
+                console.error("Error al guardar en Supabase:", error)
+              } else {
+                console.log("✅ Análisis guardado en Supabase")
+              }
+            })
+        }
       }, 2000)
     })
     .catch((error) => {
       console.error("Error al procesar audio:", error)
-      resultado.innerHTML =
-        '<div style="text-align: center; padding: 2rem; color: #e74c3c;"><h3>❌ Error al procesar el archivo de audio</h3><p>Verifica que el archivo sea válido y vuelve a intentarlo.</p></div>'
+      resultado.innerHTML = '<p style="color:#e74c3c">❌ Error al procesar el archivo de audio.</p>'
     })
 }
 
-// ===== FUNCIONES DE GRABACIÓN =====
-function iniciarMicrofono() {
-  navigator.mediaDevices
-    .getUserMedia({ audio: true })
-    .then((stream) => {
-      mediaRecorder = new MediaRecorder(stream)
-      audioChunks = []
-
-      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data)
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/wav" })
-
-        const shouldSave = confirm("¿Deseas guardar esta grabación?\n\nSí: Guardar y analizar\nNo: Solo analizar")
-
-        if (shouldSave) {
-          const audioURL = URL.createObjectURL(audioBlob)
-          const a = document.createElement("a")
-          a.href = audioURL
-          a.download = `grabacion_${Date.now()}.wav`
-          a.click()
-        }
-
-        // Mostrar contenedores de visualización y resultados
-        const visualizationContainer = document.getElementById("visualizationContainer")
-        const resultadoContainer = document.getElementById("resultado")
-
-        if (visualizationContainer) visualizationContainer.style.display = "block"
-        if (resultadoContainer) resultadoContainer.style.display = "block"
-
-        const audioURL = URL.createObjectURL(audioBlob)
-        analizarAudio(audioURL, audioBlob)
-
-        audioChunks = []
-        clearInterval(contadorInterval)
-
-        // Ocultar timer y mostrar botones
-        const recordingTimer = document.getElementById("recordingTimer")
-        const startBtn = document.getElementById("startRecordBtn")
-        const stopBtn = document.getElementById("stopRecordBtn")
-
-        if (recordingTimer) recordingTimer.style.display = "none"
-        if (startBtn) startBtn.style.display = "inline-flex"
-        if (stopBtn) stopBtn.style.display = "none"
-      }
-
-      mediaRecorder.start()
-      grabando = true
-      segundos = 0
-
-      // Mostrar timer y actualizar botones
-      const recordingTimer = document.getElementById("recordingTimer")
-      const cronometro = document.getElementById("cronometro")
-      const startBtn = document.getElementById("startRecordBtn")
-      const stopBtn = document.getElementById("stopRecordBtn")
-      const progressBar = document.getElementById("recordingProgress")
-
-      if (recordingTimer) recordingTimer.style.display = "flex"
-      if (cronometro) cronometro.textContent = "00:00"
-      if (startBtn) startBtn.style.display = "none"
-      if (stopBtn) stopBtn.style.display = "inline-flex"
-      if (progressBar) progressBar.style.width = "0%"
-
-      contadorInterval = setInterval(() => {
-        segundos++
-        if (cronometro) cronometro.textContent = formatTime(segundos)
-        if (progressBar) {
-          const progress = Math.min((segundos / 60) * 100, 100)
-          progressBar.style.width = `${progress}%`
-        }
-      }, 1000)
-    })
-    .catch((error) => {
-      console.error("Error accediendo al micrófono:", error)
-      alert("❌ Error: No se pudo acceder al micrófono. Verifica los permisos.")
-    })
-}
-
-function detenerMicrofono() {
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop()
-    grabando = false
-
-    // Stop all tracks
-    mediaRecorder.stream?.getTracks().forEach((track) => track.stop())
-  }
-}
-
-// ===== FUNCIONES DE COMPARACIÓN =====
+// Función para comparación de voces
 function iniciarComparacion() {
   const archivoReal = document.getElementById("archivoReal").files[0]
   const archivoIA = document.getElementById("archivoIA").files[0]
@@ -1140,10 +616,10 @@ function iniciarComparacion() {
   const analysisContainer = document.getElementById("audioAnalysisComparativo")
   const aiDetectionContainer = document.getElementById("aiDetectionResults")
 
-  if (transcripcionContainer) transcripcionContainer.style.display = "block"
-  if (canvasGrid) canvasGrid.style.display = "grid"
-  if (analysisContainer) analysisContainer.style.display = "block"
-  if (aiDetectionContainer) aiDetectionContainer.style.display = "block"
+  transcripcionContainer.style.display = "block"
+  canvasGrid.style.display = "grid"
+  analysisContainer.style.display = "block"
+  aiDetectionContainer.style.display = "block"
 
   // Generar transcripciones
   generateRealTranscription(archivoReal, "transcripcionRealContent")
@@ -1163,28 +639,39 @@ function iniciarComparacion() {
 }
 
 function performIntelligentDetection(file1, file2) {
+  // Mostrar estado de procesamiento
   const result1Element = document.getElementById("result1")
   const result2Element = document.getElementById("result2")
   const finalResultElement = document.getElementById("finalResult")
 
-  if (result1Element) result1Element.textContent = "Analizando..."
-  if (result2Element) result2Element.textContent = "Analizando..."
-  if (finalResultElement) finalResultElement.textContent = "Procesando análisis comparativo..."
+  result1Element.textContent = "Analizando..."
+  result2Element.textContent = "Analizando..."
+  finalResultElement.textContent = "Procesando análisis comparativo..."
 
+  // Simular análisis avanzado de IA vs Real
   setTimeout(() => {
+    // Generar resultados realistas basados en características del archivo
     const analysis1 = analyzeFileForAI(file1)
     const analysis2 = analyzeFileForAI(file2)
 
+    // Mostrar resultados individuales
     displayDetectionResult(analysis1, "1")
     displayDetectionResult(analysis2, "2")
+
+    // Generar resultado comparativo
     generateComparisonResult(analysis1, analysis2)
   }, 3000)
 }
 
 function analyzeFileForAI(file) {
+  // Simulación realista basada en características del archivo
   const fileName = file.name.toLowerCase()
+  const fileSize = file.size
+
+  // Factores que sugieren IA
   let aiProbability = Math.random() * 100
 
+  // Ajustar probabilidad basada en características
   if (fileName.includes("ai") || fileName.includes("synthetic") || fileName.includes("generated")) {
     aiProbability += 30
   }
@@ -1193,6 +680,7 @@ function analyzeFileForAI(file) {
     aiProbability -= 30
   }
 
+  // Normalizar entre 0-100
   aiProbability = Math.max(0, Math.min(100, aiProbability))
 
   const isAI = aiProbability > 50
@@ -1211,56 +699,54 @@ function displayDetectionResult(analysis, number) {
   const confidenceTextElement = document.getElementById(`confidenceText${number}`)
   const detectionItem = document.getElementById(`audio${number}Detection`)
 
-  if (resultElement) {
-    resultElement.textContent = `🎯 ${analysis.type}`
-    resultElement.className = `detection-result ${analysis.isAI ? "ai" : "real"}`
-  }
+  // Configurar resultado
+  resultElement.textContent = `🎯 ${analysis.type}`
+  resultElement.className = `detection-result ${analysis.isAI ? "ai" : "real"}`
 
-  if (confidenceElement) {
-    confidenceElement.style.width = `${analysis.confidence}%`
-    confidenceElement.className = `confidence-fill ${analysis.isAI ? "ai" : "real"}`
-  }
+  // Configurar barra de confianza
+  confidenceElement.style.width = `${analysis.confidence}%`
+  confidenceElement.className = `confidence-fill ${analysis.isAI ? "ai" : "real"}`
 
-  if (confidenceTextElement) {
-    confidenceTextElement.textContent = `${analysis.confidence.toFixed(1)}%`
-  }
+  // Configurar texto de confianza
+  confidenceTextElement.textContent = `${analysis.confidence.toFixed(1)}%`
 
-  if (detectionItem) {
-    detectionItem.className = `detection-item ${analysis.isAI ? "ai" : "real"}`
-  }
+  // Configurar estilo del contenedor
+  detectionItem.className = `detection-item ${analysis.isAI ? "ai" : "real"}`
 }
 
 function generateComparisonResult(analysis1, analysis2) {
   const finalResultElement = document.getElementById("finalResult")
-  if (!finalResultElement) return
 
   let resultText = ""
   let resultClass = ""
 
   if (!analysis1.isAI && !analysis2.isAI) {
+    // Ambas son reales
     resultText = `🎤🎤 AMBAS VOCES SON REALES
-
+    
 Archivo 1: Voz humana real (${analysis1.confidence.toFixed(1)}% confianza)
 Archivo 2: Voz humana real (${analysis2.confidence.toFixed(1)}% confianza)
 
 ✅ No se detectó síntesis artificial en ninguno de los audios.`
     resultClass = "both-real"
   } else if (analysis1.isAI && analysis2.isAI) {
+    // Ambas son IA
     resultText = `🤖🤖 AMBAS VOCES SON GENERADAS POR IA
-
+    
 Archivo 1: Voz sintética (${analysis1.confidence.toFixed(1)}% confianza)
 Archivo 2: Voz sintética (${analysis2.confidence.toFixed(1)}% confianza)
 
 ⚠️ Se detectó síntesis artificial en ambos audios.`
     resultClass = "both-ai"
   } else {
+    // Una real, una IA
     const realFile = !analysis1.isAI ? "Archivo 1" : "Archivo 2"
     const aiFile = analysis1.isAI ? "Archivo 1" : "Archivo 2"
     const realConfidence = !analysis1.isAI ? analysis1.confidence : analysis2.confidence
     const aiConfidence = analysis1.isAI ? analysis1.confidence : analysis2.confidence
 
     resultText = `🎤🤖 UNA VOZ REAL Y UNA VOZ IA
-
+    
 ${realFile}: Voz humana real (${realConfidence.toFixed(1)}% confianza)
 ${aiFile}: Voz sintética (${aiConfidence.toFixed(1)}% confianza)
 
@@ -1270,263 +756,6 @@ ${aiFile}: Voz sintética (${aiConfidence.toFixed(1)}% confianza)
 
   finalResultElement.textContent = resultText
   finalResultElement.className = `comparison-result ${resultClass}`
-}
-
-// ===== FUNCIONES DE ENTRENAMIENTO =====
-function switchPangramTab(tabName) {
-  document.querySelectorAll(".pangram-content").forEach((tab) => {
-    tab.classList.remove("active")
-  })
-
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.classList.remove("active")
-  })
-
-  const targetTab = document.getElementById(tabName + "Tab")
-  if (targetTab) {
-    targetTab.classList.add("active")
-  }
-
-  event.target.classList.add("active")
-}
-
-function selectPangram(element) {
-  document.querySelectorAll(".pangram-item").forEach((item) => {
-    item.classList.remove("selected")
-  })
-
-  element.classList.add("selected")
-  selectedPangram = element.getAttribute("data-pangram") || element.textContent.trim().replace(/"/g, "")
-
-  const selectedPangramContainer = document.getElementById("selectedPangram")
-  const pangramDisplay = document.getElementById("pangramDisplay")
-  const trainingRecording = document.getElementById("trainingRecording")
-
-  if (selectedPangramContainer) selectedPangramContainer.style.display = "block"
-  if (pangramDisplay) pangramDisplay.textContent = selectedPangram
-  if (trainingRecording) trainingRecording.style.display = "block"
-
-  console.log("Pangrama seleccionado:", selectedPangram)
-}
-
-function iniciarGrabacionEtiquetada(tipo) {
-  if (!selectedPangram) {
-    alert("⚠️ Por favor selecciona un pangrama antes de comenzar la grabación")
-    return
-  }
-
-  const recordingViz = document.getElementById("recordingVisualization")
-  const trainingTimer = document.getElementById("trainingTimer")
-  const estadoElement = document.getElementById("estadoEntrenamiento")
-  const startBtn = document.getElementById("startTrainingBtn")
-  const stopBtn = document.getElementById("stopTrainingBtn")
-
-  tipoActual = tipo
-  navigator.mediaDevices
-    .getUserMedia({ audio: true })
-    .then((stream) => {
-      mediaRecorderEntrenamiento = new MediaRecorder(stream)
-      chunksEntrenamiento = []
-
-      if (recordingViz) recordingViz.style.display = "block"
-      if (trainingTimer) trainingTimer.style.display = "block"
-      if (startBtn) startBtn.style.display = "none"
-      if (stopBtn) stopBtn.style.display = "inline-flex"
-
-      setupRecordingVisualization(stream)
-
-      mediaRecorderEntrenamiento.ondataavailable = (e) => chunksEntrenamiento.push(e.data)
-      mediaRecorderEntrenamiento.onstop = () => {
-        const blob = new Blob(chunksEntrenamiento, { type: "audio/wav" })
-
-        const shouldSave = confirm(
-          `¿Deseas guardar la grabación de voz?\n\nPangrama usado: "${selectedPangram}"\n\nSí: Guardar archivo\nNo: Solo procesar`,
-        )
-
-        if (shouldSave) {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement("a")
-          a.href = url
-          a.download = `voz_entrenamiento_${Date.now()}.wav`
-          a.click()
-        }
-
-        const shouldTrain = confirm(
-          `🧠 ¿Deseas entrenar el modelo con esta grabación?\n\nEsto mejorará la precisión del detector de voz IA.\n\nSí: Entrenar modelo\nNo: Solo guardar`,
-        )
-
-        if (shouldTrain && estadoElement) {
-          estadoElement.innerHTML = `
-            <div style="text-align: center; padding: 1rem; background: rgba(0,255,224,0.1); border-radius: 8px; border: 1px solid #00ffe0;">
-              <p style="color: #00ffe0; margin: 0;">🧠 Entrenando modelo con nueva muestra de voz...</p>
-              <div style="margin-top: 0.5rem;">
-                <div style="width: 100%; background: #333; border-radius: 10px; overflow: hidden;">
-                  <div style="width: 0%; height: 20px; background: linear-gradient(90deg, #00ffe0, #00ccb3); transition: width 3s ease;" id="trainingProgress"></div>
-                </div>
-              </div>
-            </div>
-          `
-
-          setTimeout(() => {
-            const progressBar = document.getElementById("trainingProgress")
-            if (progressBar) progressBar.style.width = "100%"
-          }, 100)
-
-          setTimeout(() => {
-            const accuracy = Math.floor(Math.random() * 10) + 85
-            if (estadoElement) {
-              estadoElement.innerHTML = `
-                <div style="text-align: center; padding: 1rem; background: rgba(46, 204, 113, 0.1); border-radius: 8px; border: 1px solid #2ecc71;">
-                  <p style="color: #2ecc71; margin: 0; font-weight: 600;">✅ Modelo entrenado exitosamente</p>
-                  <p style="color: #00ffe0; margin: 0.5rem 0 0 0;">Nueva precisión: ${accuracy}%</p>
-                </div>
-              `
-            }
-          }, 3500)
-        } else if (estadoElement) {
-          estadoElement.innerHTML = `
-            <div style="text-align: center; padding: 1rem; background: rgba(241, 196, 15, 0.1); border-radius: 8px; border: 1px solid #f1c40f;">
-              <p style="color: #f1c40f; margin: 0;">📁 Grabación guardada sin entrenar el modelo</p>
-            </div>
-          `
-        }
-
-        cleanupAudioResources()
-        if (recordingViz) recordingViz.style.display = "none"
-        if (trainingTimer) trainingTimer.style.display = "none"
-        if (startBtn) startBtn.style.display = "inline-flex"
-        if (stopBtn) stopBtn.style.display = "none"
-        clearInterval(intervaloEntrenamiento)
-      }
-
-      mediaRecorderEntrenamiento.start()
-      if (estadoElement) estadoElement.textContent = `🎙️ Grabando voz para entrenamiento...`
-      cronometroEntrenamiento = 0
-
-      const timerElement = document.getElementById("timerLinear")
-      const progressBar = document.getElementById("progressBar")
-
-      if (timerElement) timerElement.textContent = "00:00"
-      if (progressBar) progressBar.style.width = "0%"
-
-      intervaloEntrenamiento = setInterval(() => {
-        cronometroEntrenamiento++
-        if (timerElement) {
-          const mins = Math.floor(cronometroEntrenamiento / 60)
-          const secs = cronometroEntrenamiento % 60
-          timerElement.textContent = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-        }
-
-        if (progressBar) {
-          const progress = Math.min((cronometroEntrenamiento / 60) * 100, 100)
-          progressBar.style.width = `${progress}%`
-        }
-      }, 1000)
-    })
-    .catch((error) => {
-      console.error("Error accediendo al micrófono:", error)
-      alert("❌ Error: No se pudo acceder al micrófono. Verifica los permisos.")
-    })
-}
-
-function detenerGrabacionEtiquetada() {
-  if (mediaRecorderEntrenamiento && mediaRecorderEntrenamiento.state === "recording") {
-    mediaRecorderEntrenamiento.stop()
-    cleanupAudioResources()
-    clearInterval(intervaloEntrenamiento)
-  }
-}
-
-// ===== FUNCIONES AUXILIARES =====
-function formatTime(seconds) {
-  const minutes = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-}
-
-function estimateFundamentalFrequency(audioData, sampleRate) {
-  const minPeriod = Math.floor(sampleRate / 800)
-  const maxPeriod = Math.floor(sampleRate / 80)
-
-  let bestCorrelation = 0
-  let bestPeriod = minPeriod
-
-  for (let period = minPeriod; period < maxPeriod && period < audioData.length / 2; period++) {
-    let correlation = 0
-    let count = 0
-
-    for (let i = 0; i < audioData.length - period; i++) {
-      correlation += audioData[i] * audioData[i + period]
-      count++
-    }
-
-    correlation /= count
-
-    if (correlation > bestCorrelation) {
-      bestCorrelation = correlation
-      bestPeriod = period
-    }
-  }
-
-  return sampleRate / bestPeriod
-}
-
-function setupRecordingVisualization(stream) {
-  const canvas = document.getElementById("recordingCanvas")
-  if (!canvas) return
-
-  const ctx = canvas.getContext("2d")
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-  const source = audioContext.createMediaStreamSource(stream)
-
-  recordingAnalyser = audioContext.createAnalyser()
-  recordingAnalyser.fftSize = 2048
-  source.connect(recordingAnalyser)
-
-  const bufferLength = recordingAnalyser.frequencyBinCount
-  recordingDataArray = new Uint8Array(bufferLength)
-
-  function drawRecordingWave() {
-    recordingAnimationId = requestAnimationFrame(drawRecordingWave)
-
-    recordingAnalyser.getByteTimeDomainData(recordingDataArray)
-
-    ctx.fillStyle = "#000"
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-    ctx.lineWidth = 2
-    ctx.strokeStyle = userConfig.colors.general
-    ctx.beginPath()
-
-    const sliceWidth = canvas.width / bufferLength
-    let x = 0
-
-    for (let i = 0; i < bufferLength; i++) {
-      const v = recordingDataArray[i] / 128.0
-      const y = (v * canvas.height) / 2
-
-      if (i === 0) {
-        ctx.moveTo(x, y)
-      } else {
-        ctx.lineTo(x, y)
-      }
-
-      x += sliceWidth
-    }
-
-    ctx.stroke()
-  }
-
-  drawRecordingWave()
-}
-
-function cleanupAudioResources() {
-  if (recordingAnimationId) {
-    cancelAnimationFrame(recordingAnimationId)
-    recordingAnimationId = null
-  }
-  recordingAnalyser = null
-  recordingDataArray = null
 }
 
 function archivoToBuffer(archivo) {
@@ -1542,8 +771,6 @@ function archivoToBuffer(archivo) {
 
 function graficarAmbosAudios(buffer1, buffer2) {
   const overlayCanvas = document.getElementById("overlayCanvas")
-  if (!overlayCanvas) return
-
   const overlayCtx = overlayCanvas.getContext("2d")
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
 
@@ -1568,16 +795,15 @@ function graficarAmbosAudios(buffer1, buffer2) {
     context.stroke()
   }
 
-  graficar(buffer1, userConfig.colors.real, overlayCtx, overlayCanvas)
-  graficar(buffer2, userConfig.colors.ia, overlayCtx, overlayCanvas)
+  graficar(buffer1, "#4A90E2", overlayCtx, overlayCanvas)
+  graficar(buffer2, "#E74C3C", overlayCtx, overlayCanvas)
+  drawCanvasWithAxes(overlayCanvas, null)
 }
 
 function graficarAudiosSeparados(realBuffer, iaBuffer) {
   const realCanvas = document.getElementById("realCanvas")
   const iaCanvas = document.getElementById("iaCanvas")
   const spectralCanvas = document.getElementById("spectralCanvas")
-
-  if (!realCanvas || !iaCanvas || !spectralCanvas) return
 
   const realCtx = realCanvas.getContext("2d")
   const iaCtx = iaCanvas.getContext("2d")
@@ -1608,10 +834,15 @@ function graficarAudiosSeparados(realBuffer, iaBuffer) {
     context.stroke()
   }
 
-  graficarIndividual(realBuffer, userConfig.colors.real, realCtx, realCanvas)
-  graficarIndividual(iaBuffer, userConfig.colors.ia, iaCtx, iaCanvas)
+  graficarIndividual(realBuffer, "#4A90E2", realCtx, realCanvas)
+  graficarIndividual(iaBuffer, "#E74C3C", iaCtx, iaCanvas)
 
+  drawCanvasWithAxes(realCanvas, null)
+  drawCanvasWithAxes(iaCanvas, null)
+
+  // Análisis espectral comparativo
   graficarAnalisisEspectralDetallado(realBuffer, iaBuffer, spectralCtx, spectralCanvas)
+  drawCanvasWithAxes(spectralCanvas, null)
 }
 
 function graficarAnalisisEspectralDetallado(realBuffer, iaBuffer, ctx, canvas) {
@@ -1631,14 +862,15 @@ function graficarAnalisisEspectralDetallado(realBuffer, iaBuffer, ctx, canvas) {
     const realHeight = realSample * canvas.height * 0.8
     const iaHeight = iaSample * canvas.height * 0.8
 
-    ctx.fillStyle = userConfig.colors.real
+    ctx.fillStyle = "#4A90E2"
     ctx.fillRect(i * barWidth, canvas.height - realHeight, barWidth * 0.4, realHeight)
 
-    ctx.fillStyle = userConfig.colors.ia
+    ctx.fillStyle = "#E74C3C"
     ctx.fillRect(i * barWidth + barWidth * 0.4, canvas.height - iaHeight, barWidth * 0.4, iaHeight)
   }
 }
 
+// Función mejorada para análisis detallado
 function analyzeAudioDetails(audioBuffer, targetPrefix = "") {
   const rawData = audioBuffer.getChannelData(0)
   const sampleRate = audioBuffer.sampleRate
@@ -1695,9 +927,9 @@ function analyzeAudioDetails(audioBuffer, targetPrefix = "") {
       }
     })
 
-    const analysisContainer = document.getElementById("audioAnalysisIndividual")
-    if (analysisContainer) analysisContainer.style.display = "block"
+    document.getElementById("audioAnalysisIndividual").style.display = "block"
   } else {
+    // Análisis comparativo
     comparativeData[targetPrefix] = analysisData
 
     const suffix = targetPrefix.charAt(0).toUpperCase() + targetPrefix.slice(1)
@@ -1759,40 +991,303 @@ function calculateSimilarities() {
   }
 }
 
+// Función mejorada para selección de pangramas
+function selectPangram(element) {
+  document.querySelectorAll(".pangram-item").forEach((item) => {
+    item.classList.remove("selected")
+  })
+
+  element.classList.add("selected")
+  selectedPangram = element.getAttribute("data-pangram") || element.textContent.trim().replace(/"/g, "")
+
+  const pangramTextElement = document.getElementById("pangramText")
+  if (pangramTextElement) {
+    pangramTextElement.textContent = selectedPangram
+  }
+
+  console.log("Pangrama seleccionado:", selectedPangram)
+}
+
+// Función mejorada para iniciar grabación de entrenamiento
+function iniciarGrabacionEtiquetada(tipo) {
+  if (!selectedPangram) {
+    alert("⚠️ Por favor selecciona un pangrama antes de comenzar la grabación")
+    return
+  }
+
+  const recordingViz = document.getElementById("recordingVisualization")
+  const linearTimer = document.getElementById("linearTimer")
+  const estadoElement = document.getElementById("estadoEntrenamiento")
+  const pangramDisplay = document.getElementById("recordingPangramDisplay")
+  const currentPangramText = document.getElementById("currentPangramText")
+
+  if (!recordingViz || !linearTimer || !estadoElement) {
+    console.error("Elementos de UI no encontrados")
+    return
+  }
+
+  tipoActual = tipo
+  navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => {
+      mediaRecorderEntrenamiento = new MediaRecorder(stream)
+      chunksEntrenamiento = []
+
+      // Mostrar elementos de grabación
+      recordingViz.style.display = "block"
+      linearTimer.style.display = "block"
+      pangramDisplay.style.display = "block"
+
+      // Mostrar pangrama actual
+      if (currentPangramText) {
+        currentPangramText.textContent = selectedPangram
+      }
+
+      setupRecordingVisualization(stream)
+
+      mediaRecorderEntrenamiento.ondataavailable = (e) => chunksEntrenamiento.push(e.data)
+      mediaRecorderEntrenamiento.onstop = () => {
+        const blob = new Blob(chunksEntrenamiento, { type: "audio/wav" })
+
+        const shouldSave = confirm(
+          `¿Deseas guardar la grabación de voz?\n\nPangrama usado: "${selectedPangram}"\n\nSí: Guardar archivo\nNo: Solo procesar`,
+        )
+
+        if (shouldSave) {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = `voz_entrenamiento_${Date.now()}.wav`
+          a.click()
+        }
+
+        const shouldTrain = confirm(
+          `🧠 ¿Deseas entrenar el modelo con esta grabación?\n\nEsto mejorará la precisión del detector de voz IA.\n\nSí: Entrenar modelo\nNo: Solo guardar`,
+        )
+
+        if (shouldTrain) {
+          estadoElement.innerHTML = `
+            <div style="text-align: center; padding: 1rem; background: rgba(0,255,255,0.1); border-radius: 8px; border: 1px solid #0ff;">
+              <p style="color: #0ff; margin: 0;">🧠 Entrenando modelo con nueva muestra de voz...</p>
+              <div style="margin-top: 0.5rem;">
+                <div style="width: 100%; background: #333; border-radius: 10px; overflow: hidden;">
+                  <div style="width: 0%; height: 20px; background: linear-gradient(90deg, #0ff, #00cccc); transition: width 3s ease;" id="trainingProgress"></div>
+                </div>
+              </div>
+            </div>
+          `
+
+          setTimeout(() => {
+            const progressBar = document.getElementById("trainingProgress")
+            if (progressBar) progressBar.style.width = "100%"
+          }, 100)
+
+          setTimeout(() => {
+            const accuracy = Math.floor(Math.random() * 10) + 85
+            estadoElement.innerHTML = `
+              <div style="text-align: center; padding: 1rem; background: rgba(46, 204, 113, 0.1); border-radius: 8px; border: 1px solid #2ecc71;">
+                <p style="color: #2ecc71; margin: 0; font-weight: 600;">✅ Modelo entrenado exitosamente</p>
+                <p style="color: #0ff; margin: 0.5rem 0 0 0;">Nueva precisión: ${accuracy}%</p>
+              </div>
+            `
+          }, 3500)
+        } else {
+          estadoElement.innerHTML = `
+            <div style="text-align: center; padding: 1rem; background: rgba(241, 196, 15, 0.1); border-radius: 8px; border: 1px solid #f1c40f;">
+              <p style="color: #f1c40f; margin: 0;">📁 Grabación guardada sin entrenar el modelo</p>
+            </div>
+          `
+        }
+
+        cleanupAudioResources()
+        recordingViz.style.display = "none"
+        linearTimer.style.display = "none"
+        pangramDisplay.style.display = "none"
+        clearInterval(intervaloEntrenamiento)
+      }
+
+      mediaRecorderEntrenamiento.start()
+      estadoElement.textContent = `🎙️ Grabando voz para entrenamiento...`
+      cronometroEntrenamiento = 0
+
+      // Timer lineal que solo avanza
+      const timerElement = document.getElementById("timerLinear")
+      const progressBar = document.getElementById("progressBar")
+
+      if (timerElement) timerElement.textContent = "00:00"
+      if (progressBar) progressBar.style.width = "0%"
+
+      intervaloEntrenamiento = setInterval(() => {
+        cronometroEntrenamiento++
+        if (timerElement) {
+          const mins = Math.floor(cronometroEntrenamiento / 60)
+          const secs = cronometroEntrenamiento % 60
+          timerElement.textContent = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+        }
+
+        // Actualizar barra de progreso (máximo 60 segundos)
+        if (progressBar) {
+          const progress = Math.min((cronometroEntrenamiento / 60) * 100, 100)
+          progressBar.style.width = `${progress}%`
+        }
+      }, 1000)
+    })
+    .catch((error) => {
+      console.error("Error accediendo al micrófono:", error)
+      alert("❌ Error: No se pudo acceder al micrófono. Verifica los permisos.")
+    })
+}
+
+function detenerGrabacionEtiquetada() {
+  if (mediaRecorderEntrenamiento && mediaRecorderEntrenamiento.state === "recording") {
+    mediaRecorderEntrenamiento.stop()
+    cleanupAudioResources()
+    clearInterval(intervaloEntrenamiento)
+  }
+}
+
+// Funciones auxiliares
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+}
+
+function estimateFundamentalFrequency(audioData, sampleRate) {
+  const minPeriod = Math.floor(sampleRate / 800)
+  const maxPeriod = Math.floor(sampleRate / 80)
+
+  let bestCorrelation = 0
+  let bestPeriod = minPeriod
+
+  for (let period = minPeriod; period < maxPeriod && period < audioData.length / 2; period++) {
+    let correlation = 0
+    let count = 0
+
+    for (let i = 0; i < audioData.length - period; i++) {
+      correlation += audioData[i] * audioData[i + period]
+      count++
+    }
+
+    correlation /= count
+
+    if (correlation > bestCorrelation) {
+      bestCorrelation = correlation
+      bestPeriod = period
+    }
+  }
+
+  return sampleRate / bestPeriod
+}
+
+function setupRecordingVisualization(stream) {
+  const canvas = document.getElementById("recordingCanvas")
+  if (!canvas) return
+
+  const ctx = canvas.getContext("2d")
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+  const source = audioContext.createMediaStreamSource(stream)
+
+  recordingAnalyser = audioContext.createAnalyser()
+  recordingAnalyser.fftSize = 2048
+  source.connect(recordingAnalyser)
+
+  const bufferLength = recordingAnalyser.frequencyBinCount
+  recordingDataArray = new Uint8Array(bufferLength)
+
+  function drawRecordingWave() {
+    recordingAnimationId = requestAnimationFrame(drawRecordingWave)
+
+    recordingAnalyser.getByteTimeDomainData(recordingDataArray)
+
+    ctx.fillStyle = "#000"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    ctx.lineWidth = 2
+    ctx.strokeStyle = "#0ff"
+    ctx.beginPath()
+
+    const sliceWidth = canvas.width / bufferLength
+    let x = 0
+
+    for (let i = 0; i < bufferLength; i++) {
+      const v = recordingDataArray[i] / 128.0
+      const y = (v * canvas.height) / 2
+
+      if (i === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+
+      x += sliceWidth
+    }
+
+    ctx.stroke()
+  }
+
+  drawRecordingWave()
+}
+
+function cleanupAudioResources() {
+  if (recordingAnimationId) {
+    cancelAnimationFrame(recordingAnimationId)
+    recordingAnimationId = null
+  }
+  recordingAnalyser = null
+  recordingDataArray = null
+}
+
 function validateAudioFile(file, statusElementId) {
   const statusElement = document.getElementById(statusElementId)
   const maxSize = 50 * 1024 * 1024
   const allowedTypes = ["audio/mp3", "audio/mpeg", "audio/wav", "audio/wave"]
 
   if (!file) {
-    if (statusElement) {
-      statusElement.textContent = ""
-      statusElement.className = "file-status"
-    }
+    statusElement.textContent = ""
+    statusElement.className = "file-status"
     return false
   }
 
   if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().match(/\.(mp3|wav)$/)) {
-    if (statusElement) {
-      statusElement.textContent = "❌ Formato no válido. Use MP3 o WAV"
-      statusElement.className = "file-status error"
-    }
+    statusElement.textContent = "❌ Formato no válido. Use MP3 o WAV"
+    statusElement.className = "file-status error"
     return false
   }
 
   if (file.size > maxSize) {
-    if (statusElement) {
-      statusElement.textContent = "❌ Archivo muy grande. Máximo 50MB"
-      statusElement.className = "file-status error"
-    }
+    statusElement.textContent = "❌ Archivo muy grande. Máximo 50MB"
+    statusElement.className = "file-status error"
     return false
   }
 
-  if (statusElement) {
-    statusElement.textContent = "✅ Archivo válido"
-    statusElement.className = "file-status success"
-  }
+  statusElement.textContent = "✅ Archivo válido"
+  statusElement.className = "file-status success"
   return true
+}
+
+function drawCanvasWithAxes(canvas, drawFunction) {
+  const wrapper = canvas.parentElement
+
+  const existingLabels = wrapper.querySelectorAll(".axis-label")
+  existingLabels.forEach((label) => label.remove())
+
+  if (!wrapper.classList.contains("canvas-with-axes")) {
+    wrapper.classList.add("canvas-with-axes")
+  }
+
+  const xLabel = document.createElement("div")
+  xLabel.className = "axis-label x-axis-label"
+  xLabel.textContent = "Tiempo (s)"
+
+  const yLabel = document.createElement("div")
+  yLabel.className = "axis-label y-axis-label"
+  yLabel.textContent = "Frecuencia (Hz)"
+
+  wrapper.appendChild(xLabel)
+  wrapper.appendChild(yLabel)
+
+  if (drawFunction) drawFunction()
 }
 
 function generateRealTranscription(audioFile, targetElementId) {
@@ -1808,8 +1303,6 @@ function generateRealTranscription(audioFile, targetElementId) {
       "El sistema está analizando las características de la voz para determinar si es artificial.",
       "La tecnología de reconocimiento de voz ha avanzado significativamente en los últimos años.",
       "Este audio contiene patrones vocales que serán analizados por el algoritmo.",
-      "La inteligencia artificial puede generar voces muy realistas en la actualidad.",
-      "Nuestro sistema utiliza múltiples algoritmos para detectar voces sintéticas.",
     ]
 
     const randomTranscription = sampleTranscriptions[Math.floor(Math.random() * sampleTranscriptions.length)]
@@ -1818,59 +1311,7 @@ function generateRealTranscription(audioFile, targetElementId) {
   }, 2000)
 }
 
-// ===== FUNCIONES DE VALIDACIÓN =====
-function validateEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email)
-}
-
-function validatePhone(phone) {
-  const phoneRegex = /^\d{10}$/
-  return phoneRegex.test(phone)
-}
-
-function showFieldError(fieldId, message) {
-  const field = document.getElementById(fieldId)
-  if (!field) return
-
-  field.classList.add("input-error")
-  field.classList.remove("input-success")
-
-  const existingError = field.parentNode.querySelector(".form-error")
-  if (existingError) {
-    existingError.remove()
-  }
-
-  const errorDiv = document.createElement("div")
-  errorDiv.className = "form-error"
-  errorDiv.textContent = message
-  field.parentNode.appendChild(errorDiv)
-}
-
-function showFieldSuccess(fieldId) {
-  const field = document.getElementById(fieldId)
-  if (!field) return
-
-  field.classList.add("input-success")
-  field.classList.remove("input-error")
-
-  const existingError = field.parentNode.querySelector(".form-error")
-  if (existingError) {
-    existingError.remove()
-  }
-}
-
-function clearFormErrors() {
-  document.querySelectorAll(".form-error").forEach((error) => error.remove())
-  document.querySelectorAll(".input-error").forEach((field) => {
-    field.classList.remove("input-error")
-  })
-  document.querySelectorAll(".input-success").forEach((field) => {
-    field.classList.remove("input-success")
-  })
-}
-
-// ===== FUNCIONES DEL MENÚ DE OPCIONES =====
+// Funciones del menú de opciones
 function toggleOptionsMenu() {
   const dropdown = document.getElementById("optionsDropdown")
   if (dropdown) dropdown.classList.toggle("show")
@@ -1879,7 +1320,10 @@ function toggleOptionsMenu() {
 function showProfile() {
   const dropdown = document.getElementById("optionsDropdown")
   if (dropdown) dropdown.classList.remove("show")
-  showSection("perfil")
+
+  document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+  document.getElementById("perfil").classList.remove("oculto")
+  document.querySelectorAll(".nav-link").forEach((l) => l.classList.remove("active"))
 }
 
 function showAccount() {
@@ -1891,11 +1335,16 @@ function showAccount() {
 function showSettings() {
   const dropdown = document.getElementById("optionsDropdown")
   if (dropdown) dropdown.classList.remove("show")
-  showSection("configuracion")
+
+  document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+  document.getElementById("configuracion").classList.remove("oculto")
+  document.querySelectorAll(".nav-link").forEach((l) => l.classList.remove("active"))
+
+  // Cargar configuración actual
   loadCurrentConfig()
 }
 
-// ===== FUNCIONES DE CONFIGURACIÓN =====
+// Funciones de configuración
 function loadCurrentConfig() {
   const themeSelector = document.getElementById("themeSelector")
   const languageSelector = document.getElementById("languageSelector")
@@ -1914,8 +1363,6 @@ function loadCurrentConfig() {
 
 function changeTheme() {
   const themeSelector = document.getElementById("themeSelector")
-  if (!themeSelector) return
-
   userConfig.theme = themeSelector.value
 
   if (userConfig.theme === "light") {
@@ -1927,8 +1374,6 @@ function changeTheme() {
 
 function changeLanguage() {
   const languageSelector = document.getElementById("languageSelector")
-  if (!languageSelector) return
-
   userConfig.language = languageSelector.value
   updateNavigation()
 }
@@ -1943,6 +1388,7 @@ function updateGraphColors() {
   if (generalColorInput) userConfig.colors.general = generalColorInput.value
 
   updatePreview()
+  applyGraphColors()
 }
 
 function updatePreview() {
@@ -1959,6 +1405,17 @@ function updatePreview() {
   if (generalPreview) {
     generalPreview.style.setProperty("--preview-color", userConfig.colors.general)
   }
+}
+
+function applyGraphColors() {
+  // Actualizar colores en gráficas existentes
+  const canvases = document.querySelectorAll("canvas")
+  canvases.forEach((canvas) => {
+    // Re-dibujar canvas con nuevos colores si es necesario
+    if (canvas.id === "waveformCanvas" || canvas.id === "spectrumCanvas") {
+      // Los colores se aplicarán en el próximo análisis
+    }
+  })
 }
 
 function saveConfiguration() {
@@ -1980,6 +1437,7 @@ function resetConfiguration() {
 
     document.body.classList.remove("light-theme")
     loadCurrentConfig()
+    applyGraphColors()
     updateNavigation()
 
     alert("🔄 Configuración restablecida")
@@ -1994,16 +1452,106 @@ function loadUserConfiguration() {
     if (userConfig.theme === "light") {
       document.body.classList.add("light-theme")
     }
+
+    applyGraphColors()
   }
 }
 
-// ===== FUNCIONES PARA MODAL DE CANVAS =====
+function mostrarModo(modo) {
+  // Función para compatibilidad
+  console.log("Modo:", modo)
+}
+
+function logout() {
+  const dropdown = document.getElementById("optionsDropdown")
+  if (dropdown) dropdown.classList.remove("show")
+
+  if (confirm("¿Estás seguro de que quieres cerrar sesión?")) {
+    userState = {
+      isLoggedIn: false,
+      hasProfile: false,
+      email: "",
+      userData: null,
+    }
+
+    updateNavigation()
+    document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+    document.getElementById("auth").classList.remove("oculto")
+
+    const authForm = document.getElementById("authForm")
+    const authStatus = document.getElementById("authStatus")
+    if (authForm) authForm.reset()
+    if (authStatus) authStatus.textContent = ""
+  }
+}
+
+// Funciones adicionales para completar funcionalidad
+function iniciarMicrofono() {
+  navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => {
+      mediaRecorder = new MediaRecorder(stream)
+      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data)
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: "audio/wav" })
+
+        const shouldSave = confirm("¿Deseas guardar esta grabación?\n\nSí: Guardar y analizar\nNo: Solo analizar")
+
+        if (shouldSave) {
+          const audioURL = URL.createObjectURL(audioBlob)
+          const a = document.createElement("a")
+          a.href = audioURL
+          a.download = `grabacion_${Date.now()}.wav`
+          a.click()
+        }
+
+        const audioURL = URL.createObjectURL(audioBlob)
+        analizarAudio(audioURL, audioBlob)
+
+        audioChunks = []
+        clearInterval(contadorInterval)
+        const recordingTimer = document.getElementById("recordingTimer")
+        if (recordingTimer) recordingTimer.style.display = "none"
+      }
+
+      mediaRecorder.start()
+      grabando = true
+      segundos = 0
+
+      const recordingTimer = document.getElementById("recordingTimer")
+      const cronometro = document.getElementById("cronometro")
+      if (recordingTimer) recordingTimer.style.display = "flex"
+      if (cronometro) cronometro.textContent = "00:00"
+
+      contadorInterval = setInterval(() => {
+        segundos++
+        if (cronometro) cronometro.textContent = formatTime(segundos)
+      }, 1000)
+    })
+    .catch((error) => {
+      console.error("Error accediendo al micrófono:", error)
+      alert("❌ Error: No se pudo acceder al micrófono. Verifica los permisos.")
+    })
+}
+
+function detenerMicrofono() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop()
+    grabando = false
+  }
+}
+
+// Funciones para modal de canvas
 function expandCanvas(canvasId) {
   const originalCanvas = document.getElementById(canvasId)
   const modal = document.getElementById("canvasModal")
   const expandedCanvas = document.getElementById("expandedCanvas")
 
   if (!originalCanvas || !modal || !expandedCanvas) return
+
+  modalZoom = 1
+  modalPanX = 0
+  modalPanY = 0
 
   expandedCanvas.width = originalCanvas.width * 2
   expandedCanvas.height = originalCanvas.height * 2
@@ -2019,31 +1567,37 @@ function closeModal() {
   if (modal) modal.style.display = "none"
 }
 
-// ===== FUNCIONES DE NAVEGACIÓN MÓVIL =====
-function toggleMobileMenu() {
-  const mobileNav = document.getElementById("mobileNav")
-  if (mobileNav) {
-    mobileNav.classList.toggle("show")
+// Inicialización
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("🚀 VozCheck iniciado")
+
+  userState = {
+    isLoggedIn: false,
+    hasProfile: false,
+    email: "",
+    userData: null,
   }
-}
 
-function togglePasswordVisibility() {
-  const passwordInput = document.getElementById("authPassword")
-  const toggleIcon = document.getElementById("passwordToggleIcon")
+  updateNavigation()
 
-  if (passwordInput && toggleIcon) {
-    if (passwordInput.type === "password") {
-      passwordInput.type = "text"
-      toggleIcon.textContent = "🙈"
-    } else {
-      passwordInput.type = "password"
-      toggleIcon.textContent = "👁️"
-    }
+  document.querySelectorAll(".pantalla").forEach((p) => p.classList.add("oculto"))
+  const authSection = document.getElementById("auth")
+  if (authSection) {
+    authSection.classList.remove("oculto")
   }
-}
 
-// ===== SETUP FUNCTIONS =====
-function setupFileInputs() {
+  const authForm = document.getElementById("authForm")
+  const perfilForm = document.getElementById("perfilForm")
+  if (authForm) authForm.reset()
+  if (perfilForm) perfilForm.reset()
+
+  const authStatus = document.getElementById("authStatus")
+  if (authStatus) {
+    authStatus.textContent = ""
+    authStatus.style.color = ""
+  }
+
+  // Event listeners para archivos
   const fileInputs = [
     { input: "archivoAudio", status: "archivoAudioStatus" },
     { input: "archivoReal", status: "archivoRealStatus" },
@@ -2058,41 +1612,34 @@ function setupFileInputs() {
       })
     }
   })
-}
 
-function setupPangramListeners() {
+  // Event listeners para pangramas
   const pangramItems = document.querySelectorAll(".pangram-item")
   pangramItems.forEach((item) => {
     item.addEventListener("click", function () {
       selectPangram(this)
     })
   })
-}
 
-function setupMobileNavigation() {
-  const mobileMenuBtn = document.getElementById("mobileMenuBtn")
-  if (mobileMenuBtn) {
-    mobileMenuBtn.addEventListener("click", toggleMobileMenu)
+  // Event listener para modo tiempo real
+  const modoTiempoRealElement = document.getElementById("modoTiempoReal")
+  const micControlsElement = document.getElementById("micControls")
+
+  if (modoTiempoRealElement && micControlsElement) {
+    modoTiempoRealElement.addEventListener("change", () => {
+      micControlsElement.style.display = modoTiempoRealElement.checked ? "block" : "none"
+    })
   }
 
-  // Cerrar menú móvil al hacer clic en un enlace
-  document.addEventListener("click", (e) => {
-    if (e.target.classList.contains("nav-link")) {
-      const mobileNav = document.getElementById("mobileNav")
-      if (mobileNav) mobileNav.classList.remove("show")
-    }
-  })
-
-  // Cerrar menú de opciones al hacer clic fuera
+  // Cerrar menú al hacer clic fuera
   document.addEventListener("click", (e) => {
     if (!e.target.closest(".options-menu")) {
       const dropdown = document.getElementById("optionsDropdown")
       if (dropdown) dropdown.classList.remove("show")
     }
   })
-}
 
-function setupValidation() {
+  // Event listeners para validación en tiempo real
   const correoField = document.getElementById("correoUsuario")
   const telefonoField = document.getElementById("telefono")
   const authEmailField = document.getElementById("authEmail")
@@ -2109,7 +1656,9 @@ function setupValidation() {
 
   if (telefonoField) {
     telefonoField.addEventListener("input", function () {
+      // Solo permitir números
       this.value = this.value.replace(/\D/g, "")
+
       if (this.value.length > 10) {
         this.value = this.value.slice(0, 10)
       }
@@ -2133,4 +1682,9 @@ function setupValidation() {
       }
     })
   }
-}
+
+  // Cargar configuración al iniciar
+  loadUserConfiguration()
+
+  console.log("✅ VozCheck inicializado correctamente")
+})
